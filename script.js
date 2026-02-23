@@ -35,16 +35,14 @@ function detect() {
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   let src = cv.imread(canvas);
-  let hsv = new cv.Mat();
   let gray = new cv.Mat();
   let circles = new cv.Mat();
+  let edges = new cv.Mat();
 
-  cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
-  cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
   cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
+  cv.Canny(gray, edges, 50, 150);
 
-  // Hough Circles
   cv.HoughCircles(
     gray,
     circles,
@@ -58,32 +56,25 @@ function detect() {
   );
 
   let best = null;
-  let bestOrangeCount = 0;
+  let bestScore = 0;
 
-  // HSV Bereich für Orange
-  let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [5, 100, 100, 0]);
-  let upper = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [20, 255, 255, 255]);
-  let mask = new cv.Mat();
-
-  cv.inRange(hsv, lower, upper, mask);
-
-  // Für jeden Kreis prüfen wie viele orange Pixel drin liegen
+  // 🔥 Alle gefundenen Kreise prüfen
   for (let i = 0; i < circles.cols; i++) {
 
     let x = circles.data32F[i * 3];
     let y = circles.data32F[i * 3 + 1];
     let r = circles.data32F[i * 3 + 2];
 
-    let count = countOrangePixels(mask, x, y, r);
+    let score = computeScore(edges, x, y, r);
 
-    if (count > bestOrangeCount) {
-      bestOrangeCount = count;
+    if (score > bestScore) {
+      bestScore = score;
       best = { x, y, r };
     }
   }
 
-  // Nur besten Kreis zeichnen
-  if (best && bestOrangeCount > 50) {
+  // Nur der beste Kreis wird gezeichnet
+  if (best && bestScore > 0.4) {
 
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 5;
@@ -101,21 +92,18 @@ function detect() {
   }
 
   src.delete();
-  hsv.delete();
   gray.delete();
   circles.delete();
-  mask.delete();
-  lower.delete();
-  upper.delete();
+  edges.delete();
 
   requestAnimationFrame(detect);
 }
 
-// 🔥 Zählt wie viele orange Pixel innerhalb des Kreises liegen
-function countOrangePixels(mask, x, y, r) {
+// 🔥 Kreis Bewertung über Kantenpunkte
+function computeScore(edges, x, y, r) {
 
-  let count = 0;
-  let samples = 200;
+  let hits = 0;
+  let samples = 120;
 
   for (let i = 0; i < samples; i++) {
 
@@ -126,17 +114,17 @@ function countOrangePixels(mask, x, y, r) {
     if (
       px >= 0 &&
       py >= 0 &&
-      px < mask.cols &&
-      py < mask.rows
+      px < edges.cols &&
+      py < edges.rows
     ) {
 
-      if (mask.ucharPtr(py, px)[0] > 0) {
-        count++;
+      if (edges.ucharPtr(py, px)[0] > 0) {
+        hits++;
       }
     }
   }
 
-  return count;
+  return hits / samples;
 }
 
 startCamera();
