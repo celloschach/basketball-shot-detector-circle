@@ -4,12 +4,6 @@ const ctx = canvas.getContext("2d");
 
 let streamStarted = false;
 
-let trackedBall = null;
-let lostFrames = 0;
-
-const MAX_DISTANCE = 120;
-const MAX_LOST_FRAMES = 8;
-
 async function startCamera() {
 
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -41,102 +35,87 @@ function detect() {
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   let src = cv.imread(canvas);
+  let hsv = new cv.Mat();
   let gray = new cv.Mat();
   let circles = new cv.Mat();
-  let edges = new cv.Mat();
 
+  cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+  cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-  cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 1);
-  cv.Canny(gray, edges, 50, 150);
+  cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
 
+  // Hough Circles
   cv.HoughCircles(
     gray,
     circles,
     cv.HOUGH_GRADIENT,
     1,
-    80,
-    80,
-    25,
+    60,
+    100,
+    35,
     20,
-    500
+    600
   );
 
   let best = null;
-  let bestScore = 0;
+  let bestOrangeCount = 0;
 
-  // 🔥 Weniger Kreise → schneller
+  // HSV Bereich für Orange
+  let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [5, 100, 100, 0]);
+  let upper = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [20, 255, 255, 255]);
+  let mask = new cv.Mat();
+
+  cv.inRange(hsv, lower, upper, mask);
+
+  // Für jeden Kreis prüfen wie viele orange Pixel drin liegen
   for (let i = 0; i < circles.cols; i++) {
 
     let x = circles.data32F[i * 3];
     let y = circles.data32F[i * 3 + 1];
     let r = circles.data32F[i * 3 + 2];
 
-    let score = computeScore(edges, x, y, r);
+    let count = countOrangePixels(mask, x, y, r);
 
-    if (score > bestScore) {
-      bestScore = score;
+    if (count > bestOrangeCount) {
+      bestOrangeCount = count;
       best = { x, y, r };
     }
   }
 
-  // Tracking
-  if (best && bestScore > 0.35) {
-
-    if (!trackedBall) {
-      trackedBall = best;
-      lostFrames = 0;
-    } else {
-
-      let dx = best.x - trackedBall.x;
-      let dy = best.y - trackedBall.y;
-      let dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < MAX_DISTANCE) {
-        trackedBall = best;
-        lostFrames = 0;
-      } else {
-        lostFrames++;
-      }
-    }
-  } else {
-    lostFrames++;
-  }
-
-  if (lostFrames > MAX_LOST_FRAMES) {
-    trackedBall = null;
-  }
-
-  // Zeichnen
-  if (trackedBall) {
+  // Nur besten Kreis zeichnen
+  if (best && bestOrangeCount > 50) {
 
     ctx.strokeStyle = "lime";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
 
     ctx.beginPath();
-    ctx.arc(trackedBall.x, trackedBall.y, trackedBall.r, 0, Math.PI * 2);
+    ctx.arc(best.x, best.y, best.r, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.strokeRect(
-      trackedBall.x - trackedBall.r,
-      trackedBall.y - trackedBall.r,
-      trackedBall.r * 2,
-      trackedBall.r * 2
+      best.x - best.r,
+      best.y - best.r,
+      best.r * 2,
+      best.r * 2
     );
   }
 
   src.delete();
+  hsv.delete();
   gray.delete();
   circles.delete();
-  edges.delete();
+  mask.delete();
+  lower.delete();
+  upper.delete();
 
   requestAnimationFrame(detect);
 }
 
-// 🔥 Schneller Score
-function computeScore(edges, x, y, r) {
+// 🔥 Zählt wie viele orange Pixel innerhalb des Kreises liegen
+function countOrangePixels(mask, x, y, r) {
 
-  let hits = 0;
-  let samples = 60; // reduziert → schneller
+  let count = 0;
+  let samples = 200;
 
   for (let i = 0; i < samples; i++) {
 
@@ -147,17 +126,17 @@ function computeScore(edges, x, y, r) {
     if (
       px >= 0 &&
       py >= 0 &&
-      px < edges.cols &&
-      py < edges.rows
+      px < mask.cols &&
+      py < mask.rows
     ) {
 
-      if (edges.ucharPtr(py, px)[0] > 0) {
-        hits++;
+      if (mask.ucharPtr(py, px)[0] > 0) {
+        count++;
       }
     }
   }
 
-  return hits / samples;
+  return count;
 }
 
 startCamera();
