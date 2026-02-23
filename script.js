@@ -4,6 +4,10 @@ const ctx = canvas.getContext("2d");
 
 let streamStarted = false;
 
+// Speichert aktuellen Ball
+let trackedBall = null;
+const MAX_DISTANCE = 100; // Abstand für Update
+
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" },
@@ -21,6 +25,7 @@ async function startCamera() {
 }
 
 function detect() {
+
   if (!streamStarted || typeof cv === "undefined") {
     requestAnimationFrame(detect);
     return;
@@ -52,7 +57,7 @@ function detect() {
   let best = null;
   let bestScore = 0;
 
-  // -------- Nur bester Kreis wird gewählt --------
+  // 🔥 Finde besten Kreis
   for (let i = 0; i < circles.cols; i++) {
 
     let x = circles.data32F[i * 3];
@@ -67,21 +72,37 @@ function detect() {
     }
   }
 
-  // Nur anzeigen wenn Kreis wirklich stark genug
-  if (best && bestScore > 0.35) {
+  // 🔥 Tracking Logik
+  if (best && bestScore > 0.4) {
+
+    if (!trackedBall) {
+      trackedBall = best;
+    } else {
+      let dx = best.x - trackedBall.x;
+      let dy = best.y - trackedBall.y;
+      let distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < MAX_DISTANCE) {
+        trackedBall = best;
+      }
+    }
+  }
+
+  // ✅ Nur EIN Kreis wird gezeichnet
+  if (trackedBall) {
 
     ctx.strokeStyle = "lime";
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
 
     ctx.beginPath();
-    ctx.arc(best.x, best.y, best.r, 0, Math.PI * 2);
+    ctx.arc(trackedBall.x, trackedBall.y, trackedBall.r, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.strokeRect(
-      best.x - best.r,
-      best.y - best.r,
-      best.r * 2,
-      best.r * 2
+      trackedBall.x - trackedBall.r,
+      trackedBall.y - trackedBall.r,
+      trackedBall.r * 2,
+      trackedBall.r * 2
     );
   }
 
@@ -93,13 +114,11 @@ function detect() {
   requestAnimationFrame(detect);
 }
 
-// --------------------------------------------------
-// 🔥 Score = Kantenanteil auf dem Kreisumfang
-// --------------------------------------------------
+// 🔥 Score Berechnung
 function computeScore(edges, x, y, r) {
 
   let hits = 0;
-  let samples = 240;
+  let samples = 180;
 
   for (let i = 0; i < samples; i++) {
 
