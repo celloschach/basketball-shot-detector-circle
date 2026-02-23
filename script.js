@@ -1,5 +1,4 @@
 const video = document.getElementById("video");
-const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -31,8 +30,8 @@ function detect() {
 
   let src = cv.imread(canvas);
   let gray = new cv.Mat();
-  let edges = new cv.Mat();
   let circles = new cv.Mat();
+  let edges = new cv.Mat();
 
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
   cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
@@ -43,34 +42,34 @@ function detect() {
     circles,
     cv.HOUGH_GRADIENT,
     1,
-    50,
+    60,
     100,
-    30,
+    35,
     20,
     600
   );
 
   let best = null;
-  let bestScore = -1;
+  let bestScore = 0;
 
-  if (circles.cols > 0) {
+  // -------- Nur bester Kreis wird gewählt --------
+  for (let i = 0; i < circles.cols; i++) {
 
-    for (let i = 0; i < circles.cols; i++) {
+    let x = circles.data32F[i * 3];
+    let y = circles.data32F[i * 3 + 1];
+    let r = circles.data32F[i * 3 + 2];
 
-      let x = circles.data32F[i * 3];
-      let y = circles.data32F[i * 3 + 1];
-      let r = circles.data32F[i * 3 + 2];
+    let score = computeScore(edges, x, y, r);
 
-      let score = computeCircleScore(edges, x, y, r);
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = { x, y, r };
-      }
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, y, r };
     }
   }
 
-  if (best) {
+  // Nur anzeigen wenn Kreis wirklich stark genug
+  if (best && bestScore > 0.35) {
+
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 4;
 
@@ -88,19 +87,19 @@ function detect() {
 
   src.delete();
   gray.delete();
-  edges.delete();
   circles.delete();
+  edges.delete();
 
   requestAnimationFrame(detect);
 }
 
 // --------------------------------------------------
-// 🔥 Kernfunktion – Bewertung eines Kreises
+// 🔥 Score = Kantenanteil auf dem Kreisumfang
 // --------------------------------------------------
-function computeCircleScore(edges, x, y, r) {
+function computeScore(edges, x, y, r) {
 
-  let matches = 0;
-  let samples = 360; // Punkte auf dem Kreisumfang
+  let hits = 0;
+  let samples = 240;
 
   for (let i = 0; i < samples; i++) {
 
@@ -115,17 +114,13 @@ function computeCircleScore(edges, x, y, r) {
       py < edges.rows
     ) {
 
-      let pixel = edges.ucharPtr(py, px)[0];
-
-      // Wenn Kante dort → Treffer
-      if (pixel > 0) {
-        matches++;
+      if (edges.ucharPtr(py, px)[0] > 0) {
+        hits++;
       }
     }
   }
 
-  // Score = Prozentuale Übereinstimmung der Kreisform
-  return matches / samples;
+  return hits / samples;
 }
 
 startCamera();
