@@ -4,24 +4,28 @@ const ctx = canvas.getContext("2d");
 
 let streamStarted = false;
 
-// Tracking State
 let trackedBall = null;
 let lostFrames = 0;
 
-const MAX_DISTANCE = 80;
-const MAX_LOST_FRAMES = 10;
+const MAX_DISTANCE = 120;
+const MAX_LOST_FRAMES = 8;
 
 async function startCamera() {
+
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" },
+    video: {
+      facingMode: "environment",
+      width: { ideal: 640 },
+      height: { ideal: 480 }
+    },
     audio: false
   });
 
   video.srcObject = stream;
 
   video.addEventListener("loadedmetadata", () => {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = 640;
+    canvas.height = 480;
     streamStarted = true;
     detect();
   });
@@ -42,7 +46,7 @@ function detect() {
   let edges = new cv.Mat();
 
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-  cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
+  cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 1);
   cv.Canny(gray, edges, 50, 150);
 
   cv.HoughCircles(
@@ -50,17 +54,17 @@ function detect() {
     circles,
     cv.HOUGH_GRADIENT,
     1,
-    60,
-    100,
-    35,
+    80,
+    80,
+    25,
     20,
-    600
+    500
   );
 
   let best = null;
   let bestScore = 0;
 
-  // 🔥 Suche besten Kreis
+  // 🔥 Weniger Kreise → schneller
   for (let i = 0; i < circles.cols; i++) {
 
     let x = circles.data32F[i * 3];
@@ -75,8 +79,8 @@ function detect() {
     }
   }
 
-  // 🔥 Tracking Logik
-  if (best && bestScore > 0.4) {
+  // Tracking
+  if (best && bestScore > 0.35) {
 
     if (!trackedBall) {
       trackedBall = best;
@@ -85,9 +89,9 @@ function detect() {
 
       let dx = best.x - trackedBall.x;
       let dy = best.y - trackedBall.y;
-      let distance = Math.sqrt(dx * dx + dy * dy);
+      let dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance < MAX_DISTANCE) {
+      if (dist < MAX_DISTANCE) {
         trackedBall = best;
         lostFrames = 0;
       } else {
@@ -98,16 +102,15 @@ function detect() {
     lostFrames++;
   }
 
-  // ❌ Ball löschen wenn zu lange verloren
   if (lostFrames > MAX_LOST_FRAMES) {
     trackedBall = null;
   }
 
-  // ✅ Nur 1 Kreis zeichnen
+  // Zeichnen
   if (trackedBall) {
 
     ctx.strokeStyle = "lime";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
 
     ctx.beginPath();
     ctx.arc(trackedBall.x, trackedBall.y, trackedBall.r, 0, Math.PI * 2);
@@ -129,11 +132,11 @@ function detect() {
   requestAnimationFrame(detect);
 }
 
-// 🔥 Kreis Bewertung
+// 🔥 Schneller Score
 function computeScore(edges, x, y, r) {
 
   let hits = 0;
-  let samples = 180;
+  let samples = 60; // reduziert → schneller
 
   for (let i = 0; i < samples; i++) {
 
