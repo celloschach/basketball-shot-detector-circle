@@ -5,28 +5,22 @@ const ctx = canvas.getContext("2d");
 let streamStarted = false;
 
 async function startCamera() {
-
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "environment",
-      width: { ideal: 640 },
-      height: { ideal: 480 }
-    },
+    video: { facingMode: "environment" },
     audio: false
   });
 
   video.srcObject = stream;
 
   video.addEventListener("loadedmetadata", () => {
-    canvas.width = 640;
-    canvas.height = 480;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     streamStarted = true;
     detect();
   });
 }
 
 function detect() {
-
   if (!streamStarted || typeof cv === "undefined") {
     requestAnimationFrame(detect);
     return;
@@ -36,8 +30,8 @@ function detect() {
 
   let src = cv.imread(canvas);
   let gray = new cv.Mat();
-  let circles = new cv.Mat();
   let edges = new cv.Mat();
+  let circles = new cv.Mat();
 
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
   cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2, 2);
@@ -48,36 +42,36 @@ function detect() {
     circles,
     cv.HOUGH_GRADIENT,
     1,
-    60,
+    50,
     100,
-    35,
+    30,
     20,
     600
   );
 
   let best = null;
-  let bestScore = 0;
+  let bestScore = -1;
 
-  // 🔥 Alle gefundenen Kreise prüfen
-  for (let i = 0; i < circles.cols; i++) {
+  if (circles.cols > 0) {
 
-    let x = circles.data32F[i * 3];
-    let y = circles.data32F[i * 3 + 1];
-    let r = circles.data32F[i * 3 + 2];
+    for (let i = 0; i < circles.cols; i++) {
 
-    let score = computeScore(edges, x, y, r);
+      let x = circles.data32F[i * 3];
+      let y = circles.data32F[i * 3 + 1];
+      let r = circles.data32F[i * 3 + 2];
 
-    if (score > bestScore) {
-      bestScore = score;
-      best = { x, y, r };
+      let score = computeCircleScore(edges, x, y, r);
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, y, r };
+      }
     }
   }
 
-  // Nur der beste Kreis wird gezeichnet
-  if (best && bestScore > 0.4) {
-
+  if (best) {
     ctx.strokeStyle = "lime";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
 
     ctx.beginPath();
     ctx.arc(best.x, best.y, best.r, 0, Math.PI * 2);
@@ -93,17 +87,19 @@ function detect() {
 
   src.delete();
   gray.delete();
-  circles.delete();
   edges.delete();
+  circles.delete();
 
   requestAnimationFrame(detect);
 }
 
-// 🔥 Kreis Bewertung über Kantenpunkte
-function computeScore(edges, x, y, r) {
+// --------------------------------------------------
+// 🔥 Kernfunktion – Bewertung eines Kreises
+// --------------------------------------------------
+function computeCircleScore(edges, x, y, r) {
 
-  let hits = 0;
-  let samples = 120;
+  let matches = 0;
+  let samples = 360; // Punkte auf dem Kreisumfang
 
   for (let i = 0; i < samples; i++) {
 
@@ -118,13 +114,17 @@ function computeScore(edges, x, y, r) {
       py < edges.rows
     ) {
 
-      if (edges.ucharPtr(py, px)[0] > 0) {
-        hits++;
+      let pixel = edges.ucharPtr(py, px)[0];
+
+      // Wenn Kante dort → Treffer
+      if (pixel > 0) {
+        matches++;
       }
     }
   }
 
-  return hits / samples;
+  // Score = Prozentuale Übereinstimmung der Kreisform
+  return matches / samples;
 }
 
 startCamera();
