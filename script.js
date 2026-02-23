@@ -4,9 +4,12 @@ const ctx = canvas.getContext("2d");
 
 let streamStarted = false;
 
-// Speichert aktuellen Ball
+// Tracking State
 let trackedBall = null;
-const MAX_DISTANCE = 100; // Abstand für Update
+let lostFrames = 0;
+
+const MAX_DISTANCE = 80;
+const MAX_LOST_FRAMES = 10;
 
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -57,7 +60,7 @@ function detect() {
   let best = null;
   let bestScore = 0;
 
-  // 🔥 Finde besten Kreis
+  // 🔥 Suche besten Kreis
   for (let i = 0; i < circles.cols; i++) {
 
     let x = circles.data32F[i * 3];
@@ -77,18 +80,30 @@ function detect() {
 
     if (!trackedBall) {
       trackedBall = best;
+      lostFrames = 0;
     } else {
+
       let dx = best.x - trackedBall.x;
       let dy = best.y - trackedBall.y;
       let distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance < MAX_DISTANCE) {
         trackedBall = best;
+        lostFrames = 0;
+      } else {
+        lostFrames++;
       }
     }
+  } else {
+    lostFrames++;
   }
 
-  // ✅ Nur EIN Kreis wird gezeichnet
+  // ❌ Ball löschen wenn zu lange verloren
+  if (lostFrames > MAX_LOST_FRAMES) {
+    trackedBall = null;
+  }
+
+  // ✅ Nur 1 Kreis zeichnen
   if (trackedBall) {
 
     ctx.strokeStyle = "lime";
@@ -114,7 +129,7 @@ function detect() {
   requestAnimationFrame(detect);
 }
 
-// 🔥 Score Berechnung
+// 🔥 Kreis Bewertung
 function computeScore(edges, x, y, r) {
 
   let hits = 0;
