@@ -2,50 +2,21 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Basketball Detection & Tracking — Keine KI</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Basketball Tracking (OpenCV.js)</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div id="container">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="overlay"></canvas>
+  <!-- Videoquelle (Kamera). Falls du statisches Video nutzen willst, source austauschen. -->
+  <video id="video" autoplay playsinline muted></video>
 
-    <div id="ui">
-      <div id="status">Warte auf OpenCV...</div>
+  <!-- Canvas zum Zeichnen der grünen Box -->
+  <canvas id="overlay"></canvas>
 
-      <div class="row">
-        <label>Proc width
-          <select id="procSize"><option>320</option><option selected>480</option><option>640</option></select>
-        </label>
-        <label>Sens <input id="sensitivity" type="range" min="8" max="40" value="20"></label>
-      </div>
+  <!-- OpenCV.js (CDN) -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 
-      <div class="row">
-        <label>H min <input id="hLower" type="range" min="0" max="179" value="5"></label>
-        <label>H max <input id="hUpper" type="range" min="0" max="179" value="30"></label>
-      </div>
-      <div class="row">
-        <label>S min <input id="sLower" type="range" min="0" max="255" value="100"></label>
-        <label>S max <input id="sUpper" type="range" min="0" max="255" value="255"></label>
-      </div>
-      <div class="row">
-        <label>V min <input id="vLower" type="range" min="0" max="255" value="80"></label>
-        <label>V max <input id="vUpper" type="range" min="0" max="255" value="255"></label>
-      </div>
-
-      <div class="row">
-        <label>Smooth α <input id="alpha" type="range" min="5" max="95" value="60"></label>
-        <button id="toggleDraw">Zeichnen: Ein</button>
-        <button id="calib">Kalibriere (Mitte)</button>
-      </div>
-
-      <div id="logpanel"><div id="log" class="log"></div></div>
-    </div>
-  </div>
-
-  <!-- OpenCV.js (kein async, damit script.js nachgeladenes cv nutzt) -->
-  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
-  <script src="script.js" defer></script>
+  <!-- Hauptscript -->
+  <script src="script.js"></script>
 </body>
 </html>
