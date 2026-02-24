@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Basketball Detection & Tracking (OpenCV.js)</title>
+  <title>Basketball Detection & Tracking — Keine KI</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,20 +22,20 @@
       </div>
 
       <div class="row">
-        <label>H lower <input id="hLower" type="range" min="0" max="179" value="5"></label>
-        <label>H upper <input id="hUpper" type="range" min="0" max="179" value="30"></label>
+        <label>H min <input id="hLower" type="range" min="0" max="179" value="5"></label>
+        <label>H max <input id="hUpper" type="range" min="0" max="179" value="30"></label>
       </div>
       <div class="row">
-        <label>S lower <input id="sLower" type="range" min="0" max="255" value="100"></label>
-        <label>S upper <input id="sUpper" type="range" min="0" max="255" value="255"></label>
+        <label>S min <input id="sLower" type="range" min="0" max="255" value="100"></label>
+        <label>S max <input id="sUpper" type="range" min="0" max="255" value="255"></label>
       </div>
       <div class="row">
-        <label>V lower <input id="vLower" type="range" min="0" max="255" value="80"></label>
-        <label>V upper <input id="vUpper" type="range" min="0" max="255" value="255"></label>
+        <label>V min <input id="vLower" type="range" min="0" max="255" value="80"></label>
+        <label>V max <input id="vUpper" type="range" min="0" max="255" value="255"></label>
       </div>
 
       <div class="row">
-        <label>Smoothing <input id="alpha" type="range" min="1" max="95" value="60"></label>
+        <label>Smooth α <input id="alpha" type="range" min="5" max="95" value="60"></label>
         <button id="toggleDraw">Zeichnen: Ein</button>
         <button id="calib">Kalibriere (Mitte)</button>
       </div>
@@ -44,7 +44,8 @@
     </div>
   </div>
 
-  <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+  <!-- OpenCV.js (kein async, damit script.js nachgeladenes cv nutzt) -->
+  <script src="https://docs.opencv.org/4.x/opencv.js"></script>
   <script src="script.js" defer></script>
 </body>
 </html>
