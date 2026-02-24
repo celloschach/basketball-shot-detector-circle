@@ -14,7 +14,7 @@
     <div class="header-right">
       <div id="statusBadge" class="badge lost">
         <span class="dot"></span>
-        <span id="statusText">Bereit</span>
+        <span id="statusText">OpenCV lädt…</span>
       </div>
     </div>
   </header>
@@ -23,11 +23,7 @@
     <div class="cam-wrapper">
       <video id="video" autoplay playsinline muted></video>
       <canvas id="overlay"></canvas>
-
-      <!-- Scan-Linien Effekt -->
       <div class="scanlines"></div>
-
-      <!-- Ecken-Deko -->
       <div class="corner tl"></div>
       <div class="corner tr"></div>
       <div class="corner bl"></div>
@@ -35,8 +31,8 @@
     </div>
 
     <div class="controls">
-      <button id="btnSwitch" class="btn-switch" title="Kamera wechseln">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button id="btnSwitch" class="btn-switch">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
           <circle cx="12" cy="13" r="4"/>
         </svg>
@@ -57,21 +53,18 @@
     </div>
     <div class="divider"></div>
     <div class="stat">
-      <span class="stat-label">BREITE</span>
-      <span class="stat-value" id="bWidth">–</span>
+      <span class="stat-label">RADIUS</span>
+      <span class="stat-value" id="bRadius">–</span>
     </div>
     <div class="divider"></div>
     <div class="stat">
-      <span class="stat-label">HÖHE</span>
-      <span class="stat-value" id="bHeight">–</span>
-    </div>
-    <div class="divider"></div>
-    <div class="stat">
-      <span class="stat-label">KONFIDENZ</span>
+      <span class="stat-label">ORANGE</span>
       <span class="stat-value" id="confidence">–</span>
     </div>
   </div>
 
+  <!-- OpenCV.js – echte Kreiserkennung im Browser -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
   <script src="script.js"></script>
 </body>
 </html>
