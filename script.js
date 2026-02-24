@@ -24,31 +24,47 @@ minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').
 
 async function startCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
+    setStatus('detecting', 'Kamera wird gestartet…');
 
+    // Schritt 1: Stream holen
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+    // Schritt 2: Stream zuweisen
     video.srcObject = stream;
 
-    await new Promise((resolve, reject) => {
-      video.addEventListener('loadedmetadata', resolve, { once: true });
-      video.addEventListener('error', reject, { once: true });
-      setTimeout(reject, 10000, new Error('Timeout'));
+    // Schritt 3: Warten bis Metadaten + Bilddaten wirklich da sind
+    await new Promise((resolve) => {
+      video.oncanplay = resolve;
     });
 
+    // Schritt 4: Video abspielen
     await video.play();
 
-    videoCanvas.width    = video.videoWidth  || 1280;
-    videoCanvas.height   = video.videoHeight || 720;
-    overlayCanvas.width  = video.videoWidth  || 1280;
-    overlayCanvas.height = video.videoHeight || 720;
+    // Schritt 5: Erst JETZT Canvas-Größe setzen (videoWidth ist jetzt garantiert > 0)
+    const W = video.videoWidth;
+    const H = video.videoHeight;
 
+    videoCanvas.width    = W;
+    videoCanvas.height   = H;
+    overlayCanvas.width  = W;
+    overlayCanvas.height = H;
+
+    console.log(`Kamera bereit: ${W}x${H}`);
     setStatus('detecting', 'Suche Basketball…');
+
+    // Schritt 6: Loop starten
     requestAnimationFrame(processFrame);
 
   } catch (err) {
-    setStatus('lost', 'Kamera-Zugriff verweigert');
-    console.error('Kamera Fehler:', err);
+    console.error('Fehler:', err);
+
+    if (err.name === 'NotAllowedError') {
+      setStatus('lost', 'Kamera-Erlaubnis verweigert');
+    } else if (err.name === 'NotFoundError') {
+      setStatus('lost', 'Keine Kamera gefunden');
+    } else {
+      setStatus('lost', 'Kamera-Fehler: ' + err.message);
+    }
   }
 }
 
