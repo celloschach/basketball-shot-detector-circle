@@ -1,54 +1,76 @@
-const video   = document.getElementById("video");
-const overlay = document.getElementById("overlay");
-const ctx     = overlay.getContext("2d");
-const status  = document.getElementById("status");
-const posX    = document.getElementById("posX");
-const posY    = document.getElementById("posY");
+const video         = document.getElementById('video');
+const videoCanvas   = document.getElementById('videoCanvas');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const vCtx          = videoCanvas.getContext('2d', { willReadFrequently: true });
+const oCtx          = overlayCanvas.getContext('2d');
+
+const statusBadge = document.getElementById('statusBadge');
+const statusText  = document.getElementById('statusText');
+const posXEl      = document.getElementById('posX');
+const posYEl      = document.getElementById('posY');
+const bWidthEl    = document.getElementById('bWidth');
+const bHeightEl   = document.getElementById('bHeight');
+const confEl      = document.getElementById('confidence');
+
+const rMinSlider  = document.getElementById('rMin');
+const gMinSlider  = document.getElementById('gMin');
+const bMaxSlider  = document.getElementById('bMax');
+const minPxSlider = document.getElementById('minPx');
+
+rMinSlider.addEventListener('input',  () => document.getElementById('rMinVal').textContent  = rMinSlider.value);
+gMinSlider.addEventListener('input',  () => document.getElementById('gMinVal').textContent  = gMinSlider.value);
+bMaxSlider.addEventListener('input',  () => document.getElementById('bMaxVal').textContent  = bMaxSlider.value);
+minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').textContent = minPxSlider.value);
 
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = stream;
-    status.textContent = "Kamera läuft – suche Basketball…";
+    await new Promise(res => video.onloadedmetadata = res);
+
+    videoCanvas.width    = video.videoWidth;
+    videoCanvas.height   = video.videoHeight;
+    overlayCanvas.width  = video.videoWidth;
+    overlayCanvas.height = video.videoHeight;
+
+    setStatus('detecting', 'Suche Basketball…');
+    requestAnimationFrame(processFrame);
   } catch (err) {
-    status.textContent = "Fehler: " + err.message;
+    setStatus('lost', 'Kamera-Zugriff verweigert');
     console.error(err);
   }
 }
 
-video.addEventListener("playing", function () {
-  overlay.width  = video.videoWidth;
-  overlay.height = video.videoHeight;
-  requestAnimationFrame(loop);
-});
+let smoothBox = null;
 
-function loop() {
-  const W = overlay.width;
-  const H = overlay.height;
+function processFrame() {
+  const W = videoCanvas.width;
+  const H = videoCanvas.height;
 
-  const tmp    = document.createElement("canvas");
-  tmp.width    = W;
-  tmp.height   = H;
-  const tmpCtx = tmp.getContext("2d");
-  tmpCtx.drawImage(video, 0, 0, W, H);
+  vCtx.drawImage(video, 0, 0, W, H);
 
-  const imageData = tmpCtx.getImageData(0, 0, W, H);
-  const data      = imageData.data;
+  const frame = vCtx.getImageData(0, 0, W, H);
+  const data  = frame.data;
 
-  let minX = W, minY = H, maxX = 0, maxY = 0, count = 0;
+  const R_MIN  = parseInt(rMinSlider.value);
+  const G_MIN  = parseInt(gMinSlider.value);
+  const B_MAX  = parseInt(bMaxSlider.value);
+  const MIN_PX = parseInt(minPxSlider.value);
 
-  for (let i = 0; i < data.length; i += 4) {
+  let minX = W, minY = H, maxX = 0, maxY = 0;
+  let count = 0;
+
+  for (let i = 0; i < data.length; i += 4 * 2) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
 
-    if (r > 150 && g > 60 && g < 180 && b < 80 && r > g + 30 && r > b + 70) {
-      const idx = i / 4;
-      const px  = idx % W;
-      const py  = Math.floor(idx / W);
+    if (r > R_MIN && g > G_MIN && g < 200 && b < B_MAX && r > g + 30 && r > b + 60) {
+      const pixelIndex = (i / 4);
+      const px = (pixelIndex * 2) % W;
+      const py = Math.floor((pixelIndex * 2) / W);
 
       if (px < minX) minX = px;
       if (px > maxX) maxX = px;
@@ -58,37 +80,123 @@ function loop() {
     }
   }
 
-  ctx.clearRect(0, 0, W, H);
+  oCtx.clearRect(0, 0, W, H);
 
-  if (count > 300) {
-    const bx = minX - 10;
-    const by = minY - 10;
-    const bw = (maxX - minX) + 20;
-    const bh = (maxY - minY) + 20;
+  if (count > MIN_PX) {
+    const rawBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    const ratio = rawBox.w / (rawBox.h || 1);
+    const isReasonable = ratio > 0.3 && ratio < 3.5;
 
-    ctx.strokeStyle = "#22ff7a";
-    ctx.lineWidth   = 3;
-    ctx.shadowColor = "#22ff7a";
-    ctx.shadowBlur  = 15;
-    ctx.strokeRect(bx, by, bw, bh);
+    if (isReasonable) {
+      const pad = 20;
+      rawBox.x = Math.max(0, rawBox.x - pad);
+      rawBox.y = Math.max(0, rawBox.y - pad);
+      rawBox.w = Math.min(W - rawBox.x, rawBox.w + pad * 2);
+      rawBox.h = Math.min(H - rawBox.y, rawBox.h + pad * 2);
 
-    ctx.shadowBlur  = 0;
-    ctx.fillStyle   = "rgba(0,0,0,0.6)";
-    ctx.fillRect(bx, by - 22, 110, 20);
-    ctx.fillStyle   = "#22ff7a";
-    ctx.font        = "bold 12px monospace";
-    ctx.fillText("🏀 BASKETBALL", bx + 4, by - 6);
+      if (!smoothBox) {
+        smoothBox = { ...rawBox };
+      } else {
+        const alpha = 0.35;
+        smoothBox.x = lerp(smoothBox.x, rawBox.x, alpha);
+        smoothBox.y = lerp(smoothBox.y, rawBox.y, alpha);
+        smoothBox.w = lerp(smoothBox.w, rawBox.w, alpha);
+        smoothBox.h = lerp(smoothBox.h, rawBox.h, alpha);
+      }
 
-    status.textContent = "Basketball erkannt!";
-    posX.textContent   = Math.round(bx + bw / 2) + "px";
-    posY.textContent   = Math.round(by + bh / 2) + "px";
+      drawTrackingBox(smoothBox, count, W, H);
+      updateStats(smoothBox, count, MIN_PX);
+      setStatus('detecting', '🏀 Basketball erkannt');
+    }
   } else {
-    status.textContent = "Kein Basketball gefunden";
-    posX.textContent   = "–";
-    posY.textContent   = "–";
+    if (smoothBox) {
+      drawFadingBox(smoothBox);
+      smoothBox = null;
+    }
+    setStatus('lost', 'Kein Basketball gefunden');
+    updateStats(null);
   }
 
-  requestAnimationFrame(loop);
+  requestAnimationFrame(processFrame);
+}
+
+function drawTrackingBox(box, count, W, H) {
+  const { x, y, w, h } = box;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  oCtx.strokeStyle = '#22ff7a';
+  oCtx.lineWidth   = 2.5;
+  oCtx.shadowColor = '#22ff7a';
+  oCtx.shadowBlur  = 12;
+  oCtx.strokeRect(x, y, w, h);
+
+  oCtx.shadowBlur = 20;
+  oCtx.lineWidth  = 4;
+  const corner = Math.min(w, h) * 0.22;
+  drawCorner(oCtx, x,     y,      corner,  corner);
+  drawCorner(oCtx, x + w, y,     -corner,  corner);
+  drawCorner(oCtx, x,     y + h,  corner, -corner);
+  drawCorner(oCtx, x + w, y + h, -corner, -corner);
+
+  oCtx.shadowBlur  = 8;
+  oCtx.strokeStyle = 'rgba(34,255,122,0.6)';
+  oCtx.lineWidth   = 1.5;
+  const cross = 12;
+  oCtx.beginPath();
+  oCtx.moveTo(cx - cross, cy); oCtx.lineTo(cx + cross, cy);
+  oCtx.moveTo(cx, cy - cross); oCtx.lineTo(cx, cy + cross);
+  oCtx.stroke();
+
+  oCtx.shadowBlur = 0;
+  const label = `BASKETBALL  ${w.toFixed(0)}×${h.toFixed(0)}px`;
+  oCtx.font = 'bold 11px Courier New';
+  const tw = oCtx.measureText(label).width;
+  const lx = Math.min(x, W - tw - 14);
+  const ly = y > 24 ? y - 26 : y + h + 8;
+
+  oCtx.fillStyle = 'rgba(0,0,0,0.65)';
+  oCtx.fillRect(lx - 4, ly - 14, tw + 12, 20);
+  oCtx.fillStyle = '#22ff7a';
+  oCtx.fillText(label, lx + 2, ly);
+}
+
+function drawCorner(ctx, x, y, dx, dy) {
+  ctx.beginPath();
+  ctx.moveTo(x + dx, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + dy);
+  ctx.stroke();
+}
+
+function drawFadingBox(box) {
+  oCtx.strokeStyle = 'rgba(34,255,122,0.25)';
+  oCtx.lineWidth = 1.5;
+  oCtx.strokeRect(box.x, box.y, box.w, box.h);
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function setStatus(type, msg) {
+  statusBadge.className = 'status-badge ' + type;
+  statusText.textContent = msg;
+}
+
+function updateStats(box, count, minPx) {
+  if (!box) {
+    posXEl.textContent   = '–';
+    posYEl.textContent   = '–';
+    bWidthEl.textContent  = '–';
+    bHeightEl.textContent = '–';
+    confEl.textContent   = '–';
+    return;
+  }
+  posXEl.textContent    = `${(box.x + box.w / 2).toFixed(0)} px`;
+  posYEl.textContent    = `${(box.y + box.h / 2).toFixed(0)} px`;
+  bWidthEl.textContent  = `${box.w.toFixed(0)} px`;
+  bHeightEl.textContent = `${box.h.toFixed(0)} px`;
+  const conf = Math.min(100, Math.round((count / (minPx * 5)) * 100));
+  confEl.textContent = `${conf} %`;
 }
 
 startCamera();
