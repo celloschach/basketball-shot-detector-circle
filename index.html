@@ -1,81 +1,21 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Basketball Tracker</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="ui-header">
-    <h1>🏀 Basketball <span>Tracker</span></h1>
-    <p class="subtitle">Echtzeit-Erkennung via Farb-Analyse</p>
+  <div id="wrapper">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
   </div>
 
-  <div class="tracker-wrapper">
-    <div class="canvas-container">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="videoCanvas"></canvas>
-      <canvas id="overlayCanvas"></canvas>
-
-      <div id="statusBadge" class="status-badge detecting">
-        <span class="dot"></span>
-        <span id="statusText">Kamera wird gestartet…</span>
-      </div>
-    </div>
-
-    <div class="sidebar">
-      <div class="info-card">
-        <h3>Erkennungs-Info</h3>
-        <div class="stat-row">
-          <span>Position X</span>
-          <span id="posX">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Position Y</span>
-          <span id="posY">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Breite</span>
-          <span id="bWidth">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Höhe</span>
-          <span id="bHeight">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Konfidenz</span>
-          <span id="confidence">–</span>
-        </div>
-      </div>
-
-      <div class="info-card">
-        <h3>Farb-Schwellwert</h3>
-        <p class="hint">Passe die Orange-Erkennung an dein Licht an.</p>
-
-        <label>Min Rot <span id="rMinVal">150</span></label>
-        <input type="range" id="rMin" min="100" max="255" value="150" />
-
-        <label>Min Grün <span id="gMinVal">60</span></label>
-        <input type="range" id="gMin" min="0" max="150" value="60" />
-
-        <label>Max Blau <span id="bMaxVal">80</span></label>
-        <input type="range" id="bMax" min="0" max="150" value="80" />
-
-        <label>Min Pixel <span id="minPxVal">200</span></label>
-        <input type="range" id="minPx" min="50" max="2000" value="200" />
-      </div>
-
-      <div class="info-card tips">
-        <h3>💡 Tipps</h3>
-        <ul>
-          <li>Halte den Basketball gut beleuchtet</li>
-          <li>Dunkler Hintergrund verbessert Erkennung</li>
-          <li>Schieberegler bei Schlechtwetter anpassen</li>
-        </ul>
-      </div>
-    </div>
+  <div id="info">
+    <p>Status: <span id="status">Wird gestartet…</span></p>
+    <p>X: <span id="posX">–</span> | Y: <span id="posY">–</span></p>
   </div>
 
   <script src="tracker.js"></script>
