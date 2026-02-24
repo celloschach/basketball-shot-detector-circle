@@ -3,16 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Basketball Circle Detection — Nur Erkennung</title>
+  <title>Basketball Circle Detection — Debug</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="container">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
+
     <div id="ui">
       <div id="status">Warte auf OpenCV...</div>
-      <div id="det">Keine Erkennung yet</div>
+      <div id="controls">
+        <label for="procSize">Proc width:</label>
+        <select id="procSize">
+          <option value="320">320</option>
+          <option value="480" selected>480</option>
+          <option value="640">640</option>
+        </select>
+        <label for="sensitivity">Hough sens:</label>
+        <input id="sensitivity" type="range" min="10" max="40" value="22">
+        <button id="toggleDraw">Zeichnen: Ein</button>
+      </div>
+      <div id="logpanel">
+        <div id="det" class="log"></div>
+      </div>
     </div>
   </div>
 
