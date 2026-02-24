@@ -1,80 +1,74 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Basketball Tracker</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <div class="ui-header">
-    <h1>🏀 Basketball <span>Tracker</span></h1>
-    <p class="subtitle">Echtzeit-Erkennung via Farb-Analyse</p>
-  </div>
-
-  <div class="tracker-wrapper">
-    <div class="canvas-container">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="videoCanvas"></canvas>
-      <canvas id="overlayCanvas"></canvas>
-
-      <div id="statusBadge" class="status-badge detecting">
+  <header>
+    <div class="logo">🏀 <span>BBALL</span>TRACK</div>
+    <div class="header-right">
+      <div id="statusBadge" class="badge lost">
         <span class="dot"></span>
-        <span id="statusText">Kamera wird gestartet…</span>
+        <span id="statusText">Bereit</span>
       </div>
     </div>
+  </header>
 
-    <div class="sidebar">
-      <div class="info-card">
-        <h3>Erkennungs-Info</h3>
-        <div class="stat-row">
-          <span>Position X</span>
-          <span id="posX">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Position Y</span>
-          <span id="posY">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Breite</span>
-          <span id="bWidth">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Höhe</span>
-          <span id="bHeight">–</span>
-        </div>
-        <div class="stat-row">
-          <span>Konfidenz</span>
-          <span id="confidence">–</span>
-        </div>
-      </div>
+  <main>
+    <div class="cam-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
 
-      <div class="info-card">
-        <h3>Farb-Schwellwert</h3>
-        <p class="hint">Passe die Orange-Erkennung an dein Licht an.</p>
+      <!-- Scan-Linien Effekt -->
+      <div class="scanlines"></div>
 
-        <label>Min Rot <span id="rMinVal">150</span></label>
-        <input type="range" id="rMin" min="100" max="255" value="150" />
+      <!-- Ecken-Deko -->
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
 
-        <label>Min Grün <span id="gMinVal">60</span></label>
-        <input type="range" id="gMin" min="0" max="150" value="60" />
+    <div class="controls">
+      <button id="btnSwitch" class="btn-switch" title="Kamera wechseln">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        Kamera wechseln
+      </button>
+    </div>
+  </main>
 
-        <label>Max Blau <span id="bMaxVal">80</span></label>
-        <input type="range" id="bMax" min="0" max="150" value="80" />
-
-        <label>Min Pixel <span id="minPxVal">200</span></label>
-        <input type="range" id="minPx" min="50" max="2000" value="200" />
-      </div>
-
-      <div class="info-card tips">
-        <h3>💡 Tipps</h3>
-        <ul>
-          <li>Halte den Basketball gut beleuchtet</li>
-          <li>Dunkler Hintergrund verbessert Erkennung</li>
-          <li>Schieberegler bei Schlechtwetter anpassen</li>
-        </ul>
-      </div>
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-label">POS X</span>
+      <span class="stat-value" id="posX">–</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <span class="stat-label">POS Y</span>
+      <span class="stat-value" id="posY">–</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <span class="stat-label">BREITE</span>
+      <span class="stat-value" id="bWidth">–</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <span class="stat-label">HÖHE</span>
+      <span class="stat-value" id="bHeight">–</span>
+    </div>
+    <div class="divider"></div>
+    <div class="stat">
+      <span class="stat-label">KONFIDENZ</span>
+      <span class="stat-value" id="confidence">–</span>
     </div>
   </div>
 
