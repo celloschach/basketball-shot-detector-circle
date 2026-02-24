@@ -5,7 +5,6 @@ const status  = document.getElementById("status");
 const posX    = document.getElementById("posX");
 const posY    = document.getElementById("posY");
 
-// Schritt 1: Kamera starten – genau wie dein funktionierender Code
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -20,19 +19,16 @@ async function startCamera() {
   }
 }
 
-// Schritt 2: Sobald Video wirklich Bilder liefert, Loop starten
 video.addEventListener("playing", function () {
   overlay.width  = video.videoWidth;
   overlay.height = video.videoHeight;
   requestAnimationFrame(loop);
 });
 
-// Schritt 3: Jeder Frame wird analysiert
 function loop() {
   const W = overlay.width;
   const H = overlay.height;
 
-  // Kamerabild in einen temporären Canvas kopieren um Pixel zu lesen
   const tmp    = document.createElement("canvas");
   tmp.width    = W;
   tmp.height   = H;
@@ -49,7 +45,6 @@ function loop() {
     const g = data[i + 1];
     const b = data[i + 2];
 
-    // Orange erkennen: Rot hoch, Grün mittel, Blau niedrig
     if (r > 150 && g > 60 && g < 180 && b < 80 && r > g + 30 && r > b + 70) {
       const idx = i / 4;
       const px  = idx % W;
@@ -63,7 +58,6 @@ function loop() {
     }
   }
 
-  // Overlay leeren
   ctx.clearRect(0, 0, W, H);
 
   if (count > 300) {
@@ -72,14 +66,12 @@ function loop() {
     const bw = (maxX - minX) + 20;
     const bh = (maxY - minY) + 20;
 
-    // Grüne Box zeichnen
     ctx.strokeStyle = "#22ff7a";
     ctx.lineWidth   = 3;
     ctx.shadowColor = "#22ff7a";
     ctx.shadowBlur  = 15;
     ctx.strokeRect(bx, by, bw, bh);
 
-    // Label
     ctx.shadowBlur  = 0;
     ctx.fillStyle   = "rgba(0,0,0,0.6)";
     ctx.fillRect(bx, by - 22, 110, 20);
@@ -87,9 +79,9 @@ function loop() {
     ctx.font        = "bold 12px monospace";
     ctx.fillText("🏀 BASKETBALL", bx + 4, by - 6);
 
-    status.textContent  = "Basketball erkannt!";
-    posX.textContent    = Math.round(bx + bw / 2) + "px";
-    posY.textContent    = Math.round(by + bh / 2) + "px";
+    status.textContent = "Basketball erkannt!";
+    posX.textContent   = Math.round(bx + bw / 2) + "px";
+    posY.textContent   = Math.round(by + bh / 2) + "px";
   } else {
     status.textContent = "Kein Basketball gefunden";
     posX.textContent   = "–";
