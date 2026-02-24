@@ -9,17 +9,35 @@ const bRadiusEl = document.getElementById("bRadius");
 const confEl    = document.getElementById("confidence");
 const btnSwitch = document.getElementById("btnSwitch");
 
+// Slider-Referenzen
+const sliders = {
+  rMin:      document.getElementById("rMin"),
+  gMin:      document.getElementById("gMin"),
+  gMax:      document.getElementById("gMax"),
+  bMax:      document.getElementById("bMax"),
+  rgDiff:    document.getElementById("rgDiff"),
+  rbDiff:    document.getElementById("rbDiff"),
+  minOrange: document.getElementById("minOrange"),
+  hough:     document.getElementById("hough"),
+};
+
+// Slider-Anzeigen live updaten
+Object.keys(sliders).forEach(key => {
+  const display = document.getElementById(key + "Val");
+  sliders[key].addEventListener("input", () => {
+    display.textContent = sliders[key].value;
+  });
+});
+
 let currentStream = null;
 let facingMode    = "environment";
 let loopRunning   = false;
 let cvReady       = false;
+let smooth        = null;
 
-// Smooth-Werte für flüssige Animation
-let smooth = null;
-
-// Einmal erstellen, nicht jeden Frame neu
-const tmp  = document.createElement("canvas");
-const tCtx = tmp.getContext("2d", { willReadFrequently: true });
+const SCALE = 0.5;
+const tmp   = document.createElement("canvas");
+const tCtx  = tmp.getContext("2d", { willReadFrequently: true });
 
 // ── OpenCV bereit ─────────────────────────────────────────────────────────────
 function onOpenCvReady() {
@@ -44,7 +62,6 @@ async function startCamera() {
     currentStream   = stream;
     video.srcObject = stream;
   } catch (err) {
-    // Fallback ohne facingMode (Desktop)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       currentStream   = stream;
@@ -60,8 +77,8 @@ async function startCamera() {
 video.addEventListener("playing", function () {
   overlay.width  = video.videoWidth;
   overlay.height = video.videoHeight;
-  tmp.width      = video.videoWidth;
-  tmp.height     = video.videoHeight;
+  tmp.width      = Math.floor(video.videoWidth  * SCALE);
+  tmp.height     = Math.floor(video.videoHeight * SCALE);
   smooth         = null;
 
   if (!loopRunning && cvReady) {
@@ -79,33 +96,48 @@ btnSwitch.addEventListener("click", function () {
   startCamera();
 });
 
-// ── Wie viel Prozent der Pixel in einem Kreis sind orange? ───────────────────
+// ── Orange-Anteil messen – Werte live von Slidern ─────────────────────────────
 function getOrangeRatio(cx, cy, radius) {
-  const r2     = radius * radius;
-  const x0     = Math.max(0, Math.floor(cx - radius));
-  const y0     = Math.max(0, Math.floor(cy - radius));
-  const x1     = Math.min(tmp.width  - 1, Math.ceil(cx + radius));
-  const y1     = Math.min(tmp.height - 1, Math.ceil(cy + radius));
-  const pixels = tCtx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  const R_MIN   = parseInt(sliders.rMin.value);
+  const G_MIN   = parseInt(sliders.gMin.value);
+  const G_MAX   = parseInt(sliders.gMax.value);
+  const B_MAX   = parseInt(sliders.bMax.value);
+  const RG_DIFF = parseInt(sliders.rgDiff.value);
+  const RB_DIFF = parseInt(sliders.rbDiff.value);
+
+  const r2 = radius * radius;
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const x1 = Math.min(tmp.width  - 1, Math.ceil(cx + radius));
+  const y1 = Math.min(tmp.height - 1, Math.ceil(cy + radius));
+  const W  = x1 - x0 + 1;
+
+  const pixels = tCtx.getImageData(x0, y0, W, y1 - y0 + 1);
   const data   = pixels.data;
-  const W      = x1 - x0 + 1;
 
   let total = 0, orange = 0;
 
   for (let py = y0; py <= y1; py++) {
     for (let px = x0; px <= x1; px++) {
-      const dx = px - cx;
-      const dy = py - cy;
-      if (dx * dx + dy * dy > r2) continue; // außerhalb des Kreises
+      const dx = px - cx, dy = py - cy;
+      if (dx * dx + dy * dy > r2) continue;
 
-      const i = ((py - y0) * W + (px - x0)) * 4;
+      const i   = ((py - y0) * W + (px - x0)) * 4;
       const red = data[i];
       const grn = data[i + 1];
       const blu = data[i + 2];
 
       total++;
-      // Orange: Rot hoch, Grün mittel, Blau niedrig
-      if (red > 130 && grn > 40 && grn < 200 && blu < 100 && red > grn + 20 && red > blu + 50) {
+
+      // Farbbedingungen – alle über Slider steuerbar
+      if (
+        red > R_MIN &&
+        grn > G_MIN &&
+        grn < G_MAX &&
+        blu < B_MAX &&
+        red > grn + RG_DIFF &&
+        red > blu + RB_DIFF
+      ) {
         orange++;
       }
     }
@@ -118,63 +150,64 @@ function getOrangeRatio(cx, cy, radius) {
 function loop() {
   if (!loopRunning) return;
 
-  const W = overlay.width;
-  const H = overlay.height;
+  const W  = overlay.width;
+  const H  = overlay.height;
+  const TW = tmp.width;
+  const TH = tmp.height;
 
-  // Frame in Canvas ziehen
-  tCtx.drawImage(video, 0, 0, W, H);
+  tCtx.drawImage(video, 0, 0, TW, TH);
 
-  // OpenCV Matrizen
   let src     = cv.imread(tmp);
   let gray    = new cv.Mat();
   let blurred = new cv.Mat();
   let circles = new cv.Mat();
 
   try {
-    // Graustufen + Weichzeichnen für stabilere Kreiserkennung
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    cv.GaussianBlur(gray, blurred, new cv.Size(11, 11), 2, 2);
+    cv.GaussianBlur(gray, blurred, new cv.Size(7, 7), 1.5, 1.5);
 
-    // Hough-Kreiserkennung
-    // Parameter: dp=1, minDist=50, param1=120 (Canny), param2=25 (Akkumulator – niedrig = sensitiver), minR=15, maxR=300
+    const houghParam2 = parseInt(sliders.hough.value);
+
     cv.HoughCircles(
       blurred,
       circles,
       cv.HOUGH_GRADIENT,
       1,
-      Math.min(W, H) / 8,  // Mindestabstand zwischen zwei Kreisen
-      120,                  // Canny-Schwelle (Kantenerkennung)
-      25,                   // Akkumulator-Schwelle (niedriger = mehr Kreise)
-      15,                   // Mindestradius in Pixel
-      Math.min(W, H) / 2   // Maximalradius
+      Math.min(TW, TH) / 6,
+      100,
+      houghParam2,           // live per Slider steuerbar
+      10,
+      Math.min(TW, TH) / 2
     );
 
     ctx.clearRect(0, 0, W, H);
 
-    let bestCircle  = null;
-    let bestOrange  = -1;
+    let bestCircle = null;
+    let bestOrange = -1;
 
-    // Alle gefundenen Kreise prüfen – den mit dem höchsten Orange-Anteil nehmen
     for (let i = 0; i < circles.cols; i++) {
-      const cx = circles.data32F[i * 3];
-      const cy = circles.data32F[i * 3 + 1];
-      const r  = circles.data32F[i * 3 + 2];
+      const cx = circles.data32F[i * 3]     / SCALE;
+      const cy = circles.data32F[i * 3 + 1] / SCALE;
+      const r  = circles.data32F[i * 3 + 2] / SCALE;
 
-      const ratio = getOrangeRatio(cx, cy, r);
+      const sCx   = circles.data32F[i * 3];
+      const sCy   = circles.data32F[i * 3 + 1];
+      const sR    = circles.data32F[i * 3 + 2];
+      const ratio = getOrangeRatio(sCx, sCy, sR);
 
       if (ratio > bestOrange) {
-        bestOrange  = ratio;
-        bestCircle  = { cx, cy, r };
+        bestOrange = ratio;
+        bestCircle = { cx, cy, r };
       }
     }
 
-    // Nur anzeigen wenn Orange-Anteil > 15% (Farbe als Bestätigung)
-    if (bestCircle && bestOrange > 0.15) {
-      // Smoothing für flüssige Bewegung
+    const minOrange = parseInt(sliders.minOrange.value) / 100;
+
+    if (bestCircle && bestOrange > minOrange) {
       if (!smooth) {
         smooth = { ...bestCircle };
       } else {
-        const a  = 0.3;
+        const a = 0.4;
         smooth.cx += (bestCircle.cx - smooth.cx) * a;
         smooth.cy += (bestCircle.cy - smooth.cy) * a;
         smooth.r  += (bestCircle.r  - smooth.r)  * a;
@@ -182,7 +215,7 @@ function loop() {
 
       drawTracking(smooth, W, H);
       updateStats(smooth, bestOrange);
-      setStatus("found", `🏀 Erkannt`);
+      setStatus("found", "🏀 Erkannt");
     } else {
       smooth = null;
       setStatus("lost", "Suche Basketball…");
@@ -190,7 +223,6 @@ function loop() {
     }
 
   } finally {
-    // OpenCV Speicher immer freigeben!
     src.delete();
     gray.delete();
     blurred.delete();
@@ -200,16 +232,15 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// ── Kreis 1:1 nachzeichnen + knapp sitzendes Quadrat ─────────────────────────
+// ── Grüner Kreis 1:1 + knapp sitzendes Quadrat ───────────────────────────────
 function drawTracking(ball, W, H) {
   const { cx, cy, r } = ball;
 
-  // Bounding-Square: so knapp wie möglich um den Kreis
   const sqX = Math.max(0, cx - r);
   const sqY = Math.max(0, cy - r);
-  const sqS = Math.min(r * 2, W - sqX, H - sqY); // quadratische Seite
+  const sqS = Math.min(r * 2, W - sqX, H - sqY);
 
-  // ── 1) Grünes Quadrat – knapp um den Kreis ──
+  // 1) Grünes Quadrat
   ctx.save();
   ctx.strokeStyle = "#00ff87";
   ctx.lineWidth   = 2.5;
@@ -217,17 +248,16 @@ function drawTracking(ball, W, H) {
   ctx.shadowBlur  = 18;
   ctx.strokeRect(sqX, sqY, sqS, sqS);
 
-  // Eck-Akzente
   ctx.lineWidth  = 4;
   ctx.shadowBlur = 28;
   const c = sqS * 0.18;
-  drawCornerShape(sqX,        sqY,         c,  c);
-  drawCornerShape(sqX + sqS,  sqY,        -c,  c);
-  drawCornerShape(sqX,        sqY + sqS,   c, -c);
-  drawCornerShape(sqX + sqS,  sqY + sqS,  -c, -c);
+  drawCornerShape(sqX,       sqY,        c,  c);
+  drawCornerShape(sqX + sqS, sqY,       -c,  c);
+  drawCornerShape(sqX,       sqY + sqS,  c, -c);
+  drawCornerShape(sqX + sqS, sqY + sqS, -c, -c);
   ctx.restore();
 
-  // ── 2) Grüner Kreis – exakter Umriss des Balls 1:1 ──
+  // 2) Grüner Kreis – exakt 1:1 auf dem Ball
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -238,7 +268,7 @@ function drawTracking(ball, W, H) {
   ctx.stroke();
   ctx.restore();
 
-  // ── 3) Kreuz im Mittelpunkt ──
+  // 3) Kreuz im Mittelpunkt
   ctx.save();
   ctx.strokeStyle = "rgba(0,255,135,0.75)";
   ctx.lineWidth   = 1.5;
@@ -251,7 +281,7 @@ function drawTracking(ball, W, H) {
   ctx.stroke();
   ctx.restore();
 
-  // ── 4) Label oben links am Quadrat ──
+  // 4) Label
   ctx.save();
   ctx.font = "bold 11px monospace";
   const label = "BASKETBALL";
@@ -261,8 +291,8 @@ function drawTracking(ball, W, H) {
 
   ctx.fillStyle = "rgba(0,0,0,0.72)";
   ctx.fillRect(lx - 4, ly - 15, tw + 12, 20);
-  ctx.fillStyle   = "#00ff87";
-  ctx.shadowBlur  = 0;
+  ctx.fillStyle  = "#00ff87";
+  ctx.shadowBlur = 0;
   ctx.fillText(label, lx + 2, ly);
   ctx.restore();
 }
@@ -283,16 +313,16 @@ function setStatus(type, msg) {
 
 function updateStats(ball, orangeRatio) {
   if (!ball) {
-    posXEl.textContent   = "–";
-    posYEl.textContent   = "–";
+    posXEl.textContent    = "–";
+    posYEl.textContent    = "–";
     bRadiusEl.textContent = "–";
-    confEl.textContent   = "–";
+    confEl.textContent    = "–";
     return;
   }
   posXEl.textContent    = `${Math.round(ball.cx)} px`;
   posYEl.textContent    = `${Math.round(ball.cy)} px`;
   bRadiusEl.textContent = `${Math.round(ball.r)} px`;
-  confEl.textContent    = `${Math.round(orangeRatio * 100)}%`;
+  confEl.textContent    = `${Math.round((orangeRatio || 0) * 100)}%`;
 }
 
-// Kein startCamera() hier – wird von onOpenCvReady() aufgerufen sobald OpenCV geladen ist
+startCamera();
