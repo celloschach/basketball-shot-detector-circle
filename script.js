@@ -25,21 +25,30 @@ minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-    video.srcObject = stream;
-    await new Promise(res => video.onloadedmetadata = res);
 
-    videoCanvas.width    = video.videoWidth;
-    videoCanvas.height   = video.videoHeight;
-    overlayCanvas.width  = video.videoWidth;
-    overlayCanvas.height = video.videoHeight;
+    video.srcObject = stream;
+
+    await new Promise((resolve, reject) => {
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+      video.addEventListener('error', reject, { once: true });
+      setTimeout(reject, 10000, new Error('Timeout'));
+    });
+
+    await video.play();
+
+    videoCanvas.width    = video.videoWidth  || 1280;
+    videoCanvas.height   = video.videoHeight || 720;
+    overlayCanvas.width  = video.videoWidth  || 1280;
+    overlayCanvas.height = video.videoHeight || 720;
 
     setStatus('detecting', 'Suche Basketball…');
     requestAnimationFrame(processFrame);
+
   } catch (err) {
     setStatus('lost', 'Kamera-Zugriff verweigert');
-    console.error(err);
+    console.error('Kamera Fehler:', err);
   }
 }
 
