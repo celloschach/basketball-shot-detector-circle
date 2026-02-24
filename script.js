@@ -1,77 +1,107 @@
-const video         = document.getElementById('video');
-const videoCanvas   = document.getElementById('videoCanvas');
-const overlayCanvas = document.getElementById('overlayCanvas');
-const vCtx          = videoCanvas.getContext('2d', { willReadFrequently: true });
-const oCtx          = overlayCanvas.getContext('2d');
+const video     = document.getElementById("video");
+const overlay   = document.getElementById("overlay");
+const ctx       = overlay.getContext("2d");
+const badge     = document.getElementById("statusBadge");
+const statusTxt = document.getElementById("statusText");
+const posXEl    = document.getElementById("posX");
+const posYEl    = document.getElementById("posY");
+const bWidthEl  = document.getElementById("bWidth");
+const bHeightEl = document.getElementById("bHeight");
+const confEl    = document.getElementById("confidence");
+const btnSwitch = document.getElementById("btnSwitch");
 
-const statusBadge = document.getElementById('statusBadge');
-const statusText  = document.getElementById('statusText');
-const posXEl      = document.getElementById('posX');
-const posYEl      = document.getElementById('posY');
-const bWidthEl    = document.getElementById('bWidth');
-const bHeightEl   = document.getElementById('bHeight');
-const confEl      = document.getElementById('confidence');
+// ── Kamera-State ─────────────────────────────────────────────────────────────
+let currentStream   = null;
+let facingMode      = "environment"; // startet mit Rückkamera
+let loopRunning     = false;
+let smoothBox       = null;
 
-const rMinSlider  = document.getElementById('rMin');
-const gMinSlider  = document.getElementById('gMin');
-const bMaxSlider  = document.getElementById('bMax');
-const minPxSlider = document.getElementById('minPx');
-
-rMinSlider.addEventListener('input',  () => document.getElementById('rMinVal').textContent  = rMinSlider.value);
-gMinSlider.addEventListener('input',  () => document.getElementById('gMinVal').textContent  = gMinSlider.value);
-bMaxSlider.addEventListener('input',  () => document.getElementById('bMaxVal').textContent  = bMaxSlider.value);
-minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').textContent = minPxSlider.value);
-
-let smoothBox = null;
-
+// ── Kamera starten ───────────────────────────────────────────────────────────
 async function startCamera() {
+  // Alten Stream stoppen falls vorhanden
+  if (currentStream) {
+    currentStream.getTracks().forEach(t => t.stop());
+    currentStream = null;
+    loopRunning   = false;
+  }
+
+  setStatus("lost", "Kamera startet…");
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false
     });
+
+    currentStream  = stream;
     video.srcObject = stream;
-    setStatus('detecting', 'Suche Basketball…');
+
   } catch (err) {
-    console.error('Kamera Fehler:', err);
-    setStatus('lost', 'Kamera-Fehler: ' + err.message);
+    // Fallback: ohne facingMode probieren (z.B. Desktop ohne Rückkamera)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
+      });
+      currentStream   = stream;
+      video.srcObject = stream;
+    } catch (err2) {
+      setStatus("lost", "Kein Kamera-Zugriff");
+      console.error(err2);
+    }
   }
 }
 
-video.addEventListener('playing', function () {
-  videoCanvas.width    = video.videoWidth;
-  videoCanvas.height   = video.videoHeight;
-  overlayCanvas.width  = video.videoWidth;
-  overlayCanvas.height = video.videoHeight;
-  requestAnimationFrame(processFrame);
+// ── Wenn Video wirklich läuft → Loop starten ─────────────────────────────────
+video.addEventListener("playing", function () {
+  overlay.width  = video.videoWidth;
+  overlay.height = video.videoHeight;
+  smoothBox      = null;
+
+  if (!loopRunning) {
+    loopRunning = true;
+    setStatus("lost", "Suche Basketball…");
+    requestAnimationFrame(loop);
+  }
 });
 
-function processFrame() {
-  const W = videoCanvas.width;
-  const H = videoCanvas.height;
+// ── Kamera wechseln ──────────────────────────────────────────────────────────
+btnSwitch.addEventListener("click", function () {
+  facingMode  = facingMode === "environment" ? "user" : "environment";
+  loopRunning = false;
+  startCamera();
+});
 
-  vCtx.drawImage(video, 0, 0, W, H);
+// ── Haupt-Loop ────────────────────────────────────────────────────────────────
+function loop() {
+  if (!loopRunning) return;
 
-  const frame = vCtx.getImageData(0, 0, W, H);
-  const data  = frame.data;
+  const W = overlay.width;
+  const H = overlay.height;
 
-  const R_MIN  = parseInt(rMinSlider.value);
-  const G_MIN  = parseInt(gMinSlider.value);
-  const B_MAX  = parseInt(bMaxSlider.value);
-  const MIN_PX = parseInt(minPxSlider.value);
+  // Kamerabild in temporären Canvas zum Pixel-Lesen
+  const tmp    = document.createElement("canvas");
+  tmp.width    = W;
+  tmp.height   = H;
+  const tCtx   = tmp.getContext("2d");
+  tCtx.drawImage(video, 0, 0, W, H);
 
-  let minX = W, minY = H, maxX = 0, maxY = 0;
-  let count = 0;
+  const imageData = tCtx.getImageData(0, 0, W, H);
+  const data      = imageData.data;
 
-  for (let i = 0; i < data.length; i += 4 * 2) {
+  let minX = W, minY = H, maxX = 0, maxY = 0, count = 0;
+
+  // Jeden 2. Pixel prüfen für Performance
+  for (let i = 0; i < data.length; i += 8) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
 
-    if (r > R_MIN && g > G_MIN && g < 200 && b < B_MAX && r > g + 30 && r > b + 60) {
-      const pixelIndex = (i / 4);
-      const px = (pixelIndex * 2) % W;
-      const py = Math.floor((pixelIndex * 2) / W);
+    // Basketball-Orange erkennen
+    if (r > 150 && g > 60 && g < 180 && b < 80 && r > g + 30 && r > b + 70) {
+      const idx = i / 4;
+      const px  = (idx * 2) % W;
+      const py  = Math.floor((idx * 2) / W);
 
       if (px < minX) minX = px;
       if (px > maxX) maxX = px;
@@ -81,122 +111,122 @@ function processFrame() {
     }
   }
 
-  oCtx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, W, H);
 
-  if (count > MIN_PX) {
-    const rawBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-    const ratio  = rawBox.w / (rawBox.h || 1);
+  if (count > 200) {
+    const rawBox = {
+      x: Math.max(0, minX - 15),
+      y: Math.max(0, minY - 15),
+      w: Math.min(W, (maxX - minX) + 30),
+      h: Math.min(H, (maxY - minY) + 30)
+    };
 
-    if (ratio > 0.3 && ratio < 3.5) {
-      const pad = 20;
-      rawBox.x = Math.max(0, rawBox.x - pad);
-      rawBox.y = Math.max(0, rawBox.y - pad);
-      rawBox.w = Math.min(W - rawBox.x, rawBox.w + pad * 2);
-      rawBox.h = Math.min(H - rawBox.y, rawBox.h + pad * 2);
+    const ratio = rawBox.w / (rawBox.h || 1);
 
+    if (ratio > 0.25 && ratio < 4) {
+      // Smoothing für flüssige Bewegung
       if (!smoothBox) {
         smoothBox = { ...rawBox };
       } else {
-        const alpha = 0.35;
-        smoothBox.x = lerp(smoothBox.x, rawBox.x, alpha);
-        smoothBox.y = lerp(smoothBox.y, rawBox.y, alpha);
-        smoothBox.w = lerp(smoothBox.w, rawBox.w, alpha);
-        smoothBox.h = lerp(smoothBox.h, rawBox.h, alpha);
+        const a = 0.3;
+        smoothBox.x = smoothBox.x + (rawBox.x - smoothBox.x) * a;
+        smoothBox.y = smoothBox.y + (rawBox.y - smoothBox.y) * a;
+        smoothBox.w = smoothBox.w + (rawBox.w - smoothBox.w) * a;
+        smoothBox.h = smoothBox.h + (rawBox.h - smoothBox.h) * a;
       }
 
-      drawTrackingBox(smoothBox, W, H);
-      updateStats(smoothBox, count, MIN_PX);
-      setStatus('detecting', '🏀 Basketball erkannt');
+      drawBox(smoothBox, W, H);
+      updateStats(smoothBox, count);
+      setStatus("found", "🏀 Erkannt");
     }
   } else {
-    if (smoothBox) {
-      drawFadingBox(smoothBox);
-      smoothBox = null;
-    }
-    setStatus('lost', 'Kein Basketball gefunden');
+    smoothBox = null;
+    setStatus("lost", "Suche Basketball…");
     updateStats(null);
   }
 
-  requestAnimationFrame(processFrame);
+  requestAnimationFrame(loop);
 }
 
-function drawTrackingBox(box, W, H) {
+// ── Grüne Tracking-Box ────────────────────────────────────────────────────────
+function drawBox(box, W, H) {
   const { x, y, w, h } = box;
   const cx = x + w / 2;
   const cy = y + h / 2;
 
-  oCtx.strokeStyle = '#22ff7a';
-  oCtx.lineWidth   = 2.5;
-  oCtx.shadowColor = '#22ff7a';
-  oCtx.shadowBlur  = 12;
-  oCtx.strokeRect(x, y, w, h);
+  // Haupt-Rechteck
+  ctx.strokeStyle = "#00ff87";
+  ctx.lineWidth   = 2;
+  ctx.shadowColor = "#00ff87";
+  ctx.shadowBlur  = 18;
+  ctx.strokeRect(x, y, w, h);
 
-  oCtx.shadowBlur = 20;
-  oCtx.lineWidth  = 4;
-  const corner = Math.min(w, h) * 0.22;
-  drawCorner(x,     y,      corner,  corner);
-  drawCorner(x + w, y,     -corner,  corner);
-  drawCorner(x,     y + h,  corner, -corner);
-  drawCorner(x + w, y + h, -corner, -corner);
+  // Eck-Akzente
+  ctx.lineWidth = 3.5;
+  ctx.shadowBlur = 28;
+  const c = Math.min(w, h) * 0.2;
+  corner(x,     y,      c,  c);
+  corner(x + w, y,     -c,  c);
+  corner(x,     y + h,  c, -c);
+  corner(x + w, y + h, -c, -c);
 
-  oCtx.shadowBlur  = 8;
-  oCtx.strokeStyle = 'rgba(34,255,122,0.6)';
-  oCtx.lineWidth   = 1.5;
-  const cross = 12;
-  oCtx.beginPath();
-  oCtx.moveTo(cx - cross, cy); oCtx.lineTo(cx + cross, cy);
-  oCtx.moveTo(cx, cy - cross); oCtx.lineTo(cx, cy + cross);
-  oCtx.stroke();
+  // Kreuz in der Mitte
+  ctx.shadowBlur  = 6;
+  ctx.strokeStyle = "rgba(0,255,135,0.5)";
+  ctx.lineWidth   = 1.5;
+  const cr = 10;
+  ctx.beginPath();
+  ctx.moveTo(cx - cr, cy); ctx.lineTo(cx + cr, cy);
+  ctx.moveTo(cx, cy - cr); ctx.lineTo(cx, cy + cr);
+  ctx.stroke();
 
-  oCtx.shadowBlur = 0;
-  const label = `BASKETBALL  ${w.toFixed(0)}x${h.toFixed(0)}px`;
-  oCtx.font = 'bold 11px Courier New';
-  const tw = oCtx.measureText(label).width;
-  const lx = Math.min(x, W - tw - 14);
-  const ly = y > 24 ? y - 26 : y + h + 8;
+  // Label
+  ctx.shadowBlur = 0;
+  const label = `BASKETBALL`;
+  ctx.font = "bold 11px 'DM Mono', monospace";
+  const tw  = ctx.measureText(label).width;
+  const lx  = Math.max(0, Math.min(x, W - tw - 16));
+  const ly  = y > 28 ? y - 10 : y + h + 20;
 
-  oCtx.fillStyle = 'rgba(0,0,0,0.65)';
-  oCtx.fillRect(lx - 4, ly - 14, tw + 12, 20);
-  oCtx.fillStyle = '#22ff7a';
-  oCtx.fillText(label, lx + 2, ly);
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.beginPath();
+  ctx.roundRect(lx - 6, ly - 15, tw + 14, 20, 4);
+  ctx.fill();
+
+  ctx.fillStyle = "#00ff87";
+  ctx.fillText(label, lx + 1, ly);
 }
 
-function drawCorner(x, y, dx, dy) {
-  oCtx.beginPath();
-  oCtx.moveTo(x + dx, y);
-  oCtx.lineTo(x, y);
-  oCtx.lineTo(x, y + dy);
-  oCtx.stroke();
+function corner(x, y, dx, dy) {
+  ctx.beginPath();
+  ctx.moveTo(x + dx, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + dy);
+  ctx.stroke();
 }
 
-function drawFadingBox(box) {
-  oCtx.strokeStyle = 'rgba(34,255,122,0.25)';
-  oCtx.lineWidth = 1.5;
-  oCtx.strokeRect(box.x, box.y, box.w, box.h);
-}
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-
+// ── UI-Helfer ────────────────────────────────────────────────────────────────
 function setStatus(type, msg) {
-  statusBadge.className  = 'status-badge ' + type;
-  statusText.textContent = msg;
+  badge.className    = "badge " + type;
+  statusTxt.textContent = msg;
 }
 
-function updateStats(box, count, minPx) {
+function updateStats(box, count) {
   if (!box) {
-    posXEl.textContent    = '–';
-    posYEl.textContent    = '–';
-    bWidthEl.textContent  = '–';
-    bHeightEl.textContent = '–';
-    confEl.textContent    = '–';
+    posXEl.textContent    = "–";
+    posYEl.textContent    = "–";
+    bWidthEl.textContent  = "–";
+    bHeightEl.textContent = "–";
+    confEl.textContent    = "–";
     return;
   }
-  posXEl.textContent    = `${(box.x + box.w / 2).toFixed(0)} px`;
-  posYEl.textContent    = `${(box.y + box.h / 2).toFixed(0)} px`;
-  bWidthEl.textContent  = `${box.w.toFixed(0)} px`;
-  bHeightEl.textContent = `${box.h.toFixed(0)} px`;
-  const conf = Math.min(100, Math.round((count / (minPx * 5)) * 100));
-  confEl.textContent    = `${conf} %`;
+  posXEl.textContent    = `${Math.round(box.x + box.w / 2)} px`;
+  posYEl.textContent    = `${Math.round(box.y + box.h / 2)} px`;
+  bWidthEl.textContent  = `${Math.round(box.w)} px`;
+  bHeightEl.textContent = `${Math.round(box.h)} px`;
+  const conf = Math.min(100, Math.round((count / 1000) * 100));
+  confEl.textContent    = `${conf}%`;
 }
 
+// ── Start ─────────────────────────────────────────────────────────────────────
 startCamera();
