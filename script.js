@@ -22,28 +22,29 @@ gMinSlider.addEventListener('input',  () => document.getElementById('gMinVal').t
 bMaxSlider.addEventListener('input',  () => document.getElementById('bMaxVal').textContent  = bMaxSlider.value);
 minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').textContent = minPxSlider.value);
 
+let smoothBox = null;
+
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
     });
     video.srcObject = stream;
-    await new Promise(res => video.onloadedmetadata = res);
-
-    videoCanvas.width    = video.videoWidth;
-    videoCanvas.height   = video.videoHeight;
-    overlayCanvas.width  = video.videoWidth;
-    overlayCanvas.height = video.videoHeight;
-
     setStatus('detecting', 'Suche Basketball…');
-    requestAnimationFrame(processFrame);
   } catch (err) {
-    setStatus('lost', 'Kamera-Zugriff verweigert');
-    console.error(err);
+    console.error('Kamera Fehler:', err);
+    setStatus('lost', 'Kamera-Fehler: ' + err.message);
   }
 }
 
-let smoothBox = null;
+video.addEventListener('playing', function () {
+  videoCanvas.width    = video.videoWidth;
+  videoCanvas.height   = video.videoHeight;
+  overlayCanvas.width  = video.videoWidth;
+  overlayCanvas.height = video.videoHeight;
+  requestAnimationFrame(processFrame);
+});
 
 function processFrame() {
   const W = videoCanvas.width;
@@ -84,10 +85,9 @@ function processFrame() {
 
   if (count > MIN_PX) {
     const rawBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-    const ratio = rawBox.w / (rawBox.h || 1);
-    const isReasonable = ratio > 0.3 && ratio < 3.5;
+    const ratio  = rawBox.w / (rawBox.h || 1);
 
-    if (isReasonable) {
+    if (ratio > 0.3 && ratio < 3.5) {
       const pad = 20;
       rawBox.x = Math.max(0, rawBox.x - pad);
       rawBox.y = Math.max(0, rawBox.y - pad);
@@ -104,7 +104,7 @@ function processFrame() {
         smoothBox.h = lerp(smoothBox.h, rawBox.h, alpha);
       }
 
-      drawTrackingBox(smoothBox, count, W, H);
+      drawTrackingBox(smoothBox, W, H);
       updateStats(smoothBox, count, MIN_PX);
       setStatus('detecting', '🏀 Basketball erkannt');
     }
@@ -120,7 +120,7 @@ function processFrame() {
   requestAnimationFrame(processFrame);
 }
 
-function drawTrackingBox(box, count, W, H) {
+function drawTrackingBox(box, W, H) {
   const { x, y, w, h } = box;
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -134,10 +134,10 @@ function drawTrackingBox(box, count, W, H) {
   oCtx.shadowBlur = 20;
   oCtx.lineWidth  = 4;
   const corner = Math.min(w, h) * 0.22;
-  drawCorner(oCtx, x,     y,      corner,  corner);
-  drawCorner(oCtx, x + w, y,     -corner,  corner);
-  drawCorner(oCtx, x,     y + h,  corner, -corner);
-  drawCorner(oCtx, x + w, y + h, -corner, -corner);
+  drawCorner(x,     y,      corner,  corner);
+  drawCorner(x + w, y,     -corner,  corner);
+  drawCorner(x,     y + h,  corner, -corner);
+  drawCorner(x + w, y + h, -corner, -corner);
 
   oCtx.shadowBlur  = 8;
   oCtx.strokeStyle = 'rgba(34,255,122,0.6)';
@@ -149,7 +149,7 @@ function drawTrackingBox(box, count, W, H) {
   oCtx.stroke();
 
   oCtx.shadowBlur = 0;
-  const label = `BASKETBALL  ${w.toFixed(0)}×${h.toFixed(0)}px`;
+  const label = `BASKETBALL  ${w.toFixed(0)}x${h.toFixed(0)}px`;
   oCtx.font = 'bold 11px Courier New';
   const tw = oCtx.measureText(label).width;
   const lx = Math.min(x, W - tw - 14);
@@ -161,12 +161,12 @@ function drawTrackingBox(box, count, W, H) {
   oCtx.fillText(label, lx + 2, ly);
 }
 
-function drawCorner(ctx, x, y, dx, dy) {
-  ctx.beginPath();
-  ctx.moveTo(x + dx, y);
-  ctx.lineTo(x, y);
-  ctx.lineTo(x, y + dy);
-  ctx.stroke();
+function drawCorner(x, y, dx, dy) {
+  oCtx.beginPath();
+  oCtx.moveTo(x + dx, y);
+  oCtx.lineTo(x, y);
+  oCtx.lineTo(x, y + dy);
+  oCtx.stroke();
 }
 
 function drawFadingBox(box) {
@@ -178,17 +178,17 @@ function drawFadingBox(box) {
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 function setStatus(type, msg) {
-  statusBadge.className = 'status-badge ' + type;
+  statusBadge.className  = 'status-badge ' + type;
   statusText.textContent = msg;
 }
 
 function updateStats(box, count, minPx) {
   if (!box) {
-    posXEl.textContent   = '–';
-    posYEl.textContent   = '–';
+    posXEl.textContent    = '–';
+    posYEl.textContent    = '–';
     bWidthEl.textContent  = '–';
     bHeightEl.textContent = '–';
-    confEl.textContent   = '–';
+    confEl.textContent    = '–';
     return;
   }
   posXEl.textContent    = `${(box.x + box.w / 2).toFixed(0)} px`;
@@ -196,7 +196,7 @@ function updateStats(box, count, minPx) {
   bWidthEl.textContent  = `${box.w.toFixed(0)} px`;
   bHeightEl.textContent = `${box.h.toFixed(0)} px`;
   const conf = Math.min(100, Math.round((count / (minPx * 5)) * 100));
-  confEl.textContent = `${conf} %`;
+  confEl.textContent    = `${conf} %`;
 }
 
 startCamera();
