@@ -1,139 +1,202 @@
-// script.js
-// Direkt einsatzbereit — benutzt OpenCV.js im Browser.
-// Hinweise: HSV-Werte ggf. anpassen (je nach Beleuchtung / Ballfarbe).
+const video         = document.getElementById('video');
+const videoCanvas   = document.getElementById('videoCanvas');
+const overlayCanvas = document.getElementById('overlayCanvas');
+const vCtx          = videoCanvas.getContext('2d', { willReadFrequently: true });
+const oCtx          = overlayCanvas.getContext('2d');
 
-let video = document.getElementById('video');
-let overlay = document.getElementById('overlay');
-let ctx = overlay.getContext('2d');
+const statusBadge = document.getElementById('statusBadge');
+const statusText  = document.getElementById('statusText');
+const posXEl      = document.getElementById('posX');
+const posYEl      = document.getElementById('posY');
+const bWidthEl    = document.getElementById('bWidth');
+const bHeightEl   = document.getElementById('bHeight');
+const confEl      = document.getElementById('confidence');
 
-let cap = null;
-let running = false;
-let prevBox = null; // für Glättung (lerp)
+const rMinSlider  = document.getElementById('rMin');
+const gMinSlider  = document.getElementById('gMin');
+const bMaxSlider  = document.getElementById('bMax');
+const minPxSlider = document.getElementById('minPx');
 
-const WIDTH = 640;
-const HEIGHT = 480;
+rMinSlider.addEventListener('input',  () => document.getElementById('rMinVal').textContent  = rMinSlider.value);
+gMinSlider.addEventListener('input',  () => document.getElementById('gMinVal').textContent  = gMinSlider.value);
+bMaxSlider.addEventListener('input',  () => document.getElementById('bMaxVal').textContent  = bMaxSlider.value);
+minPxSlider.addEventListener('input', () => document.getElementById('minPxVal').textContent = minPxSlider.value);
 
-// Kamera starten
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: WIDTH, height: HEIGHT, facingMode: "environment" },
-      audio: false
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = stream;
-    await video.play();
-    overlay.width = video.videoWidth;
-    overlay.height = video.videoHeight;
-    cap = new cv.VideoCapture(video);
-    running = true;
+    await new Promise(res => video.onloadedmetadata = res);
+
+    videoCanvas.width    = video.videoWidth;
+    videoCanvas.height   = video.videoHeight;
+    overlayCanvas.width  = video.videoWidth;
+    overlayCanvas.height = video.videoHeight;
+
+    setStatus('detecting', 'Suche Basketball…');
     requestAnimationFrame(processFrame);
   } catch (err) {
-    console.error('Kamera-Fehler:', err);
+    setStatus('lost', 'Kamera-Zugriff verweigert');
+    console.error(err);
   }
 }
 
-// Linear interpolation für Glättung
-function lerp(a, b, t) { return a + (b - a) * t; }
+let smoothBox = null;
 
-// Hauptverarbeitung (Frame für Frame)
 function processFrame() {
-  if (!running) return;
+  const W = videoCanvas.width;
+  const H = videoCanvas.height;
 
-  // Sicherheitscheck
-  if (video.readyState < 2) {
-    requestAnimationFrame(processFrame);
-    return;
-  }
+  vCtx.drawImage(video, 0, 0, W, H);
 
-  // Mats erzeugen
-  let src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
-  let hsv = new cv.Mat();
-  let mask = new cv.Mat();
+  const frame = vCtx.getImageData(0, 0, W, H);
+  const data  = frame.data;
 
-  // Capture
-  cap.read(src); // liest aktuellen Frame in src
+  const R_MIN  = parseInt(rMinSlider.value);
+  const G_MIN  = parseInt(gMinSlider.value);
+  const B_MAX  = parseInt(bMaxSlider.value);
+  const MIN_PX = parseInt(minPxSlider.value);
 
-  // RGBA -> RGB -> HSV
-  cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
-  cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+  let minX = W, minY = H, maxX = 0, maxY = 0;
+  let count = 0;
 
-  // HSV Bereich für orange / basketball (werte anpassen falls nötig)
-  // H: 5..25, S: 120..255, V: 90..255  (typische Werte für orange)
-  let lower = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [5, 120, 90, 0]);
-  let upper = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [25, 255, 255, 255]);
-  cv.inRange(hsv, lower, upper, mask);
+  for (let i = 0; i < data.length; i += 4 * 2) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
 
-  // Morphologische Operationen zur Rauschreduktion
-  let M = cv.Mat.ones(5, 5, cv.CV_8U);
-  cv.morphologyEx(mask, mask, cv.MORPH_OPEN, M);
-  cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, M);
+    if (r > R_MIN && g > G_MIN && g < 200 && b < B_MAX && r > g + 30 && r > b + 60) {
+      const pixelIndex = (i / 4);
+      const px = (pixelIndex * 2) % W;
+      const py = Math.floor((pixelIndex * 2) / W);
 
-  // Konturen finden
-  let contours = new cv.MatVector();
-  let hierarchy = new cv.Mat();
-  cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-  // größte Kontur suchen
-  let maxArea = 0;
-  let maxRect = null;
-  for (let i = 0; i < contours.size(); ++i) {
-    let cnt = contours.get(i);
-    let area = cv.contourArea(cnt);
-    if (area > maxArea) {
-      maxArea = area;
-      maxRect = cv.boundingRect(cnt);
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
+      count++;
     }
-    cnt.delete();
   }
 
-  // Zeichnen auf overlay
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  oCtx.clearRect(0, 0, W, H);
 
-  if (maxRect && maxArea > 500) { // threshold um kleine Störflecken zu ignorieren
-    // Glättung: vorherige Box und neue Box mischen
-    let target = { x: maxRect.x, y: maxRect.y, w: maxRect.width, h: maxRect.height };
-    if (!prevBox) prevBox = target;
-    // stärkeres Gewicht auf alten Wert für ruhigere Bewegung
-    prevBox.x = lerp(prevBox.x, target.x, 0.35);
-    prevBox.y = lerp(prevBox.y, target.y, 0.35);
-    prevBox.w = lerp(prevBox.w, target.w, 0.35);
-    prevBox.h = lerp(prevBox.h, target.h, 0.35);
+  if (count > MIN_PX) {
+    const rawBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    const ratio = rawBox.w / (rawBox.h || 1);
+    const isReasonable = ratio > 0.3 && ratio < 3.5;
 
-    // Rechteck zeichnen (grün)
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#00ff00';
-    ctx.beginPath();
-    ctx.rect(prevBox.x, prevBox.y, prevBox.w, prevBox.h);
-    ctx.stroke();
+    if (isReasonable) {
+      const pad = 20;
+      rawBox.x = Math.max(0, rawBox.x - pad);
+      rawBox.y = Math.max(0, rawBox.y - pad);
+      rawBox.w = Math.min(W - rawBox.x, rawBox.w + pad * 2);
+      rawBox.h = Math.min(H - rawBox.y, rawBox.h + pad * 2);
 
-    // optional: Mittelpunkt + Info
-    ctx.fillStyle = '#00ff00';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('Basketball', prevBox.x, Math.max(16, prevBox.y - 6));
+      if (!smoothBox) {
+        smoothBox = { ...rawBox };
+      } else {
+        const alpha = 0.35;
+        smoothBox.x = lerp(smoothBox.x, rawBox.x, alpha);
+        smoothBox.y = lerp(smoothBox.y, rawBox.y, alpha);
+        smoothBox.w = lerp(smoothBox.w, rawBox.w, alpha);
+        smoothBox.h = lerp(smoothBox.h, rawBox.h, alpha);
+      }
+
+      drawTrackingBox(smoothBox, count, W, H);
+      updateStats(smoothBox, count, MIN_PX);
+      setStatus('detecting', '🏀 Basketball erkannt');
+    }
   } else {
-    // Kein Ball sichtbar -> prevBox langsam ausblenden
-    if (prevBox) {
-      prevBox.x = lerp(prevBox.x, prevBox.x + prevBox.w/2, 0.1);
-      prevBox.y = lerp(prevBox.y, prevBox.y + prevBox.h/2, 0.1);
-      prevBox.w *= 0.95; prevBox.h *= 0.95;
-      if (prevBox.w < 4 || prevBox.h < 4) prevBox = null;
+    if (smoothBox) {
+      drawFadingBox(smoothBox);
+      smoothBox = null;
     }
+    setStatus('lost', 'Kein Basketball gefunden');
+    updateStats(null);
   }
-
-  // Aufräumen
-  src.delete(); hsv.delete(); mask.delete();
-  lower.delete(); upper.delete(); M.delete();
-  contours.delete(); hierarchy.delete();
 
   requestAnimationFrame(processFrame);
 }
 
-// Warte bis OpenCV geladen ist
-if (typeof cv === 'undefined') {
-  // Falls opencv noch nicht geladen ist, registriere onload
-  document.addEventListener('opencvready', startCamera);
-} else {
-  cv['onRuntimeInitialized'] = () => {
-    startCamera();
-  };
+function drawTrackingBox(box, count, W, H) {
+  const { x, y, w, h } = box;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  oCtx.strokeStyle = '#22ff7a';
+  oCtx.lineWidth   = 2.5;
+  oCtx.shadowColor = '#22ff7a';
+  oCtx.shadowBlur  = 12;
+  oCtx.strokeRect(x, y, w, h);
+
+  oCtx.shadowBlur = 20;
+  oCtx.lineWidth  = 4;
+  const corner = Math.min(w, h) * 0.22;
+  drawCorner(oCtx, x,     y,      corner,  corner);
+  drawCorner(oCtx, x + w, y,     -corner,  corner);
+  drawCorner(oCtx, x,     y + h,  corner, -corner);
+  drawCorner(oCtx, x + w, y + h, -corner, -corner);
+
+  oCtx.shadowBlur  = 8;
+  oCtx.strokeStyle = 'rgba(34,255,122,0.6)';
+  oCtx.lineWidth   = 1.5;
+  const cross = 12;
+  oCtx.beginPath();
+  oCtx.moveTo(cx - cross, cy); oCtx.lineTo(cx + cross, cy);
+  oCtx.moveTo(cx, cy - cross); oCtx.lineTo(cx, cy + cross);
+  oCtx.stroke();
+
+  oCtx.shadowBlur = 0;
+  const label = `BASKETBALL  ${w.toFixed(0)}×${h.toFixed(0)}px`;
+  oCtx.font = 'bold 11px Courier New';
+  const tw = oCtx.measureText(label).width;
+  const lx = Math.min(x, W - tw - 14);
+  const ly = y > 24 ? y - 26 : y + h + 8;
+
+  oCtx.fillStyle = 'rgba(0,0,0,0.65)';
+  oCtx.fillRect(lx - 4, ly - 14, tw + 12, 20);
+  oCtx.fillStyle = '#22ff7a';
+  oCtx.fillText(label, lx + 2, ly);
 }
+
+function drawCorner(ctx, x, y, dx, dy) {
+  ctx.beginPath();
+  ctx.moveTo(x + dx, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + dy);
+  ctx.stroke();
+}
+
+function drawFadingBox(box) {
+  oCtx.strokeStyle = 'rgba(34,255,122,0.25)';
+  oCtx.lineWidth = 1.5;
+  oCtx.strokeRect(box.x, box.y, box.w, box.h);
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function setStatus(type, msg) {
+  statusBadge.className = 'status-badge ' + type;
+  statusText.textContent = msg;
+}
+
+function updateStats(box, count, minPx) {
+  if (!box) {
+    posXEl.textContent   = '–';
+    posYEl.textContent   = '–';
+    bWidthEl.textContent  = '–';
+    bHeightEl.textContent = '–';
+    confEl.textContent   = '–';
+    return;
+  }
+  posXEl.textContent    = `${(box.x + box.w / 2).toFixed(0)} px`;
+  posYEl.textContent    = `${(box.y + box.h / 2).toFixed(0)} px`;
+  bWidthEl.textContent  = `${box.w.toFixed(0)} px`;
+  bHeightEl.textContent = `${box.h.toFixed(0)} px`;
+  const conf = Math.min(100, Math.round((count / (minPx * 5)) * 100));
+  confEl.textContent = `${conf} %`;
+}
+
+startCamera();
