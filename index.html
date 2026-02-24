@@ -39,6 +39,51 @@
         Kamera wechseln
       </button>
     </div>
+
+    <!-- Farb-Schwellwert Regler -->
+    <div class="slider-panel">
+      <h3>🎨 Farberkennung – Schwellwerte anpassen</h3>
+
+      <div class="slider-row">
+        <label>Min Rot <span id="rMinVal">130</span></label>
+        <input type="range" id="rMin" min="80" max="255" value="130">
+      </div>
+
+      <div class="slider-row">
+        <label>Min Grün <span id="gMinVal">40</span></label>
+        <input type="range" id="gMin" min="0" max="180" value="40">
+      </div>
+
+      <div class="slider-row">
+        <label>Max Grün <span id="gMaxVal">200</span></label>
+        <input type="range" id="gMax" min="100" max="255" value="200">
+      </div>
+
+      <div class="slider-row">
+        <label>Max Blau <span id="bMaxVal">110</span></label>
+        <input type="range" id="bMax" min="0" max="200" value="110">
+      </div>
+
+      <div class="slider-row">
+        <label>Rot − Grün Diff <span id="rgDiffVal">20</span></label>
+        <input type="range" id="rgDiff" min="0" max="80" value="20">
+      </div>
+
+      <div class="slider-row">
+        <label>Rot − Blau Diff <span id="rbDiffVal">50</span></label>
+        <input type="range" id="rbDiff" min="0" max="120" value="50">
+      </div>
+
+      <div class="slider-row">
+        <label>Min Orange % <span id="minOrangeVal">12</span>%</label>
+        <input type="range" id="minOrange" min="1" max="60" value="12">
+      </div>
+
+      <div class="slider-row">
+        <label>Hough Sensitivität <span id="houghVal">22</span></label>
+        <input type="range" id="hough" min="10" max="60" value="22">
+      </div>
+    </div>
   </main>
 
   <div class="stats-bar">
@@ -63,7 +108,6 @@
     </div>
   </div>
 
-  <!-- OpenCV.js – echte Kreiserkennung im Browser -->
   <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
   <script src="script.js"></script>
 </body>
