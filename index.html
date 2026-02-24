@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Basketball Circle Detection — Debug</title>
+  <title>Basketball Detection & Tracking (OpenCV.js)</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,24 +13,37 @@
 
     <div id="ui">
       <div id="status">Warte auf OpenCV...</div>
-      <div id="controls">
-        <label for="procSize">Proc width:</label>
-        <select id="procSize">
-          <option value="320">320</option>
-          <option value="480" selected>480</option>
-          <option value="640">640</option>
-        </select>
-        <label for="sensitivity">Hough sens:</label>
-        <input id="sensitivity" type="range" min="10" max="40" value="22">
+
+      <div class="row">
+        <label>Proc width
+          <select id="procSize"><option>320</option><option selected>480</option><option>640</option></select>
+        </label>
+        <label>Sens <input id="sensitivity" type="range" min="8" max="40" value="20"></label>
+      </div>
+
+      <div class="row">
+        <label>H lower <input id="hLower" type="range" min="0" max="179" value="5"></label>
+        <label>H upper <input id="hUpper" type="range" min="0" max="179" value="30"></label>
+      </div>
+      <div class="row">
+        <label>S lower <input id="sLower" type="range" min="0" max="255" value="100"></label>
+        <label>S upper <input id="sUpper" type="range" min="0" max="255" value="255"></label>
+      </div>
+      <div class="row">
+        <label>V lower <input id="vLower" type="range" min="0" max="255" value="80"></label>
+        <label>V upper <input id="vUpper" type="range" min="0" max="255" value="255"></label>
+      </div>
+
+      <div class="row">
+        <label>Smoothing <input id="alpha" type="range" min="1" max="95" value="60"></label>
         <button id="toggleDraw">Zeichnen: Ein</button>
+        <button id="calib">Kalibriere (Mitte)</button>
       </div>
-      <div id="logpanel">
-        <div id="det" class="log"></div>
-      </div>
+
+      <div id="logpanel"><div id="log" class="log"></div></div>
     </div>
   </div>
 
-  <!-- OpenCV.js -->
   <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
   <script src="script.js" defer></script>
 </body>
