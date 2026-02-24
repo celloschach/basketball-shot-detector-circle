@@ -23,14 +23,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
   overflow-x: hidden;
 }
 
-/* ── Header ─────────────────────────────── */
+/* ── Header ─────────────────────────────────────────────── */
 header {
   width: 100%;
-  max-width: 860px;
+  max-width: 1200px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -44,11 +43,9 @@ header {
   color: var(--text);
 }
 
-.logo span {
-  color: var(--green);
-}
+.logo span { color: var(--green); }
 
-/* ── Badge ──────────────────────────────── */
+/* ── Badge ──────────────────────────────────────────────── */
 .badge {
   display: flex;
   align-items: center;
@@ -88,10 +85,10 @@ header {
   50%       { opacity: 0.2; }
 }
 
-/* ── Main / Kamera ──────────────────────── */
+/* ── Main / Kamera ──────────────────────────────────────── */
 main {
   width: 100%;
-  max-width: 860px;
+  max-width: 1200px;
   padding: 0 24px;
   display: flex;
   flex-direction: column;
@@ -133,8 +130,8 @@ video {
     to bottom,
     transparent,
     transparent 2px,
-    rgba(0,0,0,0.08) 2px,
-    rgba(0,0,0,0.08) 4px
+    rgba(0,0,0,0.06) 2px,
+    rgba(0,0,0,0.06) 4px
   );
   pointer-events: none;
   z-index: 2;
@@ -148,14 +145,14 @@ video {
   border-color: var(--green);
   border-style: solid;
   z-index: 3;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 .corner.tl { top: 12px;    left: 12px;  border-width: 2px 0 0 2px; }
 .corner.tr { top: 12px;    right: 12px; border-width: 2px 2px 0 0; }
 .corner.bl { bottom: 12px; left: 12px;  border-width: 0 0 2px 2px; }
 .corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
 
-/* ── Controls ───────────────────────────── */
+/* ── Controls ────────────────────────────────────────────── */
 .controls {
   display: flex;
   gap: 12px;
@@ -184,23 +181,80 @@ video {
   box-shadow: 0 0 16px rgba(0,255,135,0.12);
 }
 
-.btn-switch:active {
-  transform: scale(0.97);
-}
+.btn-switch:active { transform: scale(0.97); }
 
 .btn-switch svg {
   flex-shrink: 0;
   transition: transform 0.4s ease;
 }
 
-.btn-switch:hover svg {
-  transform: rotate(180deg);
+.btn-switch:hover svg { transform: rotate(180deg); }
+
+/* ── Slider Panel ────────────────────────────────────────── */
+.slider-panel {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px 32px;
 }
 
-/* ── Stats Bar ──────────────────────────── */
+.slider-panel h3 {
+  grid-column: 1 / -1;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  margin-bottom: -4px;
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slider-row label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.slider-row label span {
+  color: var(--orange);
+  font-weight: 500;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 8px rgba(255,94,26,0.5);
+  cursor: pointer;
+}
+
+/* ── Stats Bar ───────────────────────────────────────────── */
 .stats-bar {
   width: 100%;
-  max-width: 860px;
+  max-width: 1200px;
   margin: 16px 24px 32px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -208,7 +262,6 @@ video {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  overflow: hidden;
 }
 
 .stat {
@@ -241,10 +294,11 @@ video {
   flex-shrink: 0;
 }
 
-/* ── Responsive ─────────────────────────── */
+/* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .stat-label { font-size: 0.5rem; }
-  .stat-value { font-size: 0.8rem; }
-  header { padding: 16px; }
-  main   { padding: 0 16px; }
+  .stat-label  { font-size: 0.5rem; }
+  .stat-value  { font-size: 0.8rem; }
+  header       { padding: 16px; }
+  main         { padding: 0 16px; }
+  .slider-panel { grid-template-columns: 1fr; }
 }
